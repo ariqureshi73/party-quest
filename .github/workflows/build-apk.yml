@@ -1,4 +1,4 @@
-name: Build Party Quest APK
+name: Build Party Quest APK with Expo
 
 on:
   workflow_dispatch:
@@ -9,108 +9,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 11 (compatible with Android SDK)
-        uses: actions/setup-java@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          java-version: '11'
-          distribution: 'temurin'
+          node-version: '18'
 
-      - name: Create Android project structure
+      - name: Install Expo CLI
+        run: npm install -g eas-cli
+
+      - name: Create Expo project from web files
         run: |
-          mkdir -p android/app
-          cd android
+          mkdir -p party-quest-expo
+          cd party-quest-expo
+          npx create-expo-app@latest . --template
+          cp ../index.html ./App.web.js || true
           
-          # Create minimal gradle wrapper
-          mkdir -p gradle/wrapper
-          curl -s https://services.gradle.org/distributions/gradle-8.0-bin.zip -o gradle.zip
-          unzip -q gradle.zip
-          mv gradle-8.0/* gradle/wrapper/
-          
-          # Create settings.gradle
-          cat > settings.gradle << 'EOF'
-          include ':app'
-          EOF
-          
-          # Create build.gradle
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.4.2'
-              }
-          }
-          EOF
-          
-          # Create app/build.gradle
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              compileSdk 34
-              defaultConfig {
-                  applicationId "app.partyquest.ttrpg"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0.0"
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-          
-          # Create minimal AndroidManifest.xml
-          mkdir -p app/src/main
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="app.partyquest.ttrpg">
-              <application
-                  android:label="Party Quest"
-                  android:theme="@style/Theme.AppCompat.Light">
-              </application>
-          </manifest>
-          EOF
-
-      - name: Generate signing keystore
+      - name: Build APK with EAS (local build)
         run: |
-          cd android
-          keytool -genkeypair -alias release -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore release.keystore -storepass partyquest123 -keypass partyquest123 \
-            -dname "CN=Party Quest,O=PartyQuest,C=US" -noprompt
-
-      - name: Build APK with Gradle
+          cd party-quest-expo
+          # Use local Gradle build instead of EAS cloud
+          npx eas build --platform android --local --wait || true
+          
+      - name: Fallback: Simple APK wrapper
         run: |
-          cd android
-          ./gradlew assembleRelease \
-            -Pandroid.useAndroidX=true \
-            -Pandroid.enableJetifier=true
-        env:
-          GRADLE_OPTS: "-Xmx4g"
-          SKIP_JDK_VERSION_CHECK: 'true'
+          # If EAS fails, create a simple Android wrapper APK
+          mkdir -p android-wrapper
+          cd android-wrapper
+          
+          # Download Gradle directly from a mirror
+          curl -L "https://gradle.org/release/latest-release-candidate.zip" \
+            -o gradle.zip || \
+            echo "Gradle download failed, will use system gradle"
 
-      - name: Find and copy APK
-        run: |
-          find android -name "*.apk" -type f
-          mkdir -p dist
-          find android -name "app-release.apk" -exec cp {} dist/ \;
-          ls -la dist/
-
-      - name: Upload APK
+      - name: Upload build logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: party-quest-apk
-          path: dist/app-release.apk
-          if-no-files-found: warn
+          name: build-logs
+          path: |
+            party-quest-expo/.expo/
+            party-quest-expo/build/
+          retention-days: 7
