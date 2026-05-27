@@ -4,15 +4,20 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html', 'manifest.json']
+    paths: ['index.html']
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -20,176 +25,110 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Android project structure
-        run: |
-          mkdir -p party-quest-app/app/src/main
-          mkdir -p party-quest-app/app/src/main/res/drawable
-          mkdir -p party-quest-app/app/src/main/res/values
-          mkdir -p party-quest-app/gradle/wrapper
-
-      - name: Create build.gradle
-        run: |
-          cat > party-quest-app/build.gradle << 'GRADLE'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              namespace 'app.partyquest.ttrpg'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId 'app.partyquest.ttrpg'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              
-              buildTypes {
-                  release {
-                      debuggable false
-                      minifyEnabled false
-                  }
-              }
-              
-              packagingOptions {
-                  exclude 'META-INF/proguard/androidx-*.pro'
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          GRADLE
-
-      - name: Create AndroidManifest.xml
-        run: |
-          cat > party-quest-app/app/src/main/AndroidManifest.xml << 'MANIFEST'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="app.partyquest.ttrpg">
-          
-              <uses-permission android:name="android.permission.INTERNET" />
-          
-              <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-          
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-          
-              </application>
-          </manifest>
-          MANIFEST
-
-      - name: Create strings.xml
-        run: |
-          cat > party-quest-app/app/src/main/res/values/strings.xml << 'STRINGS'
-          <resources>
-              <string name="app_name">Party Quest</string>
-          </resources>
-          STRINGS
-
-      - name: Create basic launcher icon
-        run: |
-          cat > party-quest-app/create_icon.py << 'PYTHON'
-          from PIL import Image, ImageDraw
-          img = Image.new('RGB', (192, 192), color='#1a1a2e')
-          draw = ImageDraw.Draw(img)
-          draw.rectangle([(10, 10), (182, 182)], outline='#0f3460', width=3)
-          draw.text((70, 85), "PQ", fill='#00d4ff')
-          img.save('party-quest-app/app/src/main/res/drawable/ic_launcher.png')
-          PYTHON
-          
-          python3 -m pip install pillow -q 2>/dev/null || true
-          python3 party-quest-app/create_icon.py || {
-            # Fallback: use 1x1 transparent PNG
-            echo -n -e '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > party-quest-app/app/src/main/res/drawable/ic_launcher.png
-          }
-
-      - name: Create MainActivity.java
-        run: |
-          mkdir -p party-quest-app/app/src/main/java/app/partyquest/ttrpg
-          cat > party-quest-app/app/src/main/java/app/partyquest/ttrpg/MainActivity.java << 'JAVA'
-          package app.partyquest.ttrpg;
-          
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
-          
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  
-                  WebView webView = new WebView(this);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.loadUrl("https://ariqureshi73.github.io/party-quest/");
-                  setContentView(webView);
-              }
-          }
-          JAVA
-
-      - name: Create settings.gradle
-        run: |
-          cat > party-quest-app/settings.gradle << 'GRADLE'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "PartyQuest"
-          include ':app'
-          GRADLE
-
-      - name: Create gradle wrapper
-        run: |
-          curl -s https://services.gradle.org/distributions/gradle-8.6-bin.zip -o gradle.zip
-          unzip -q gradle.zip
-          mkdir -p party-quest-app/gradle/wrapper
-          cp gradle-8.6/gradle/wrapper/* party-quest-app/gradle/wrapper/ || true
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          build-tools-version: 34.0.0
 
-      - name: Build APK with Gradle
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      - name: Create Capacitor project structure
+        run: |
+          mkdir -p party-quest-app/src
+          cp index.html manifest.json party-quest-app/src/
+          
+          # Create capacitor.config.json
+          cat > party-quest-app/capacitor.config.json << 'JSON'
+          {
+            "appId": "app.partyquest.ttrpg",
+            "appName": "Party Quest",
+            "webDir": "src",
+            "server": {
+              "url": "https://ariqureshi73.github.io/party-quest",
+              "cleartext": false
+            },
+            "plugins": {}
+          }
+          JSON
+
+      - name: Initialize Capacitor Android
         working-directory: party-quest-app
         run: |
-          ./gradlew --no-daemon assemble || {
-            echo "Gradle build failed, trying with AGP download..."
-            ./gradlew --no-daemon --refresh-dependencies assemble
-          }
+          npx @capacitor/cli add android --web-dir=src
 
-      - name: List APK outputs
-        run: find party-quest-app -name "*.apk" -type f
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair \
+            -alias partyquest \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
+            -storepass partyquest123 \
+            -keypass partyquest123 \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -noprompt
+
+      - name: Get SHA-256 Fingerprint
+        run: |
+          keytool -list -v \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
+            -alias partyquest \
+            -storepass partyquest123 | grep "SHA256:" | tee sha256.txt
+
+      - name: Configure Gradle for Release Build
+        working-directory: party-quest-app/android
+        run: |
+          mkdir -p gradle_props
+          cat > local.properties << 'PROPS'
+          sdk.dir=$ANDROID_HOME
+          org.gradle.jvmargs=-Xmx2048m
+          PROPS
+          
+          cat > gradle.properties << 'PROPS'
+          org.gradle.jvmargs=-Xmx2048m
+          PROPS
+
+      - name: Build APK (Gradle)
+        working-directory: party-quest-app/android
+        run: |
+          ./gradlew \
+            -Dorg.gradle.jvmargs=-Xmx2048m \
+            -Pandroid.useAndroidX=true \
+            -Pandroid.enableJetifier=true \
+            -PversionCode=1 \
+            -PversionName=1.0.0 \
+            -Psigning.keystore=$GITHUB_WORKSPACE/partyquest.keystore \
+            -Psigning.keyAlias=partyquest \
+            -Psigning.keyPassword=partyquest123 \
+            -Psigning.storePassword=partyquest123 \
+            assemble Release 2>&1 | tee build.log
+
+      - name: Find APK Output
+        run: |
+          find party-quest-app -name "*.apk" -o -name "*.aab"
+          ls -lah party-quest-app/android/app/build/outputs/apk/release/ 2>/dev/null || echo "APK dir not found"
+          ls -lah party-quest-app/android/app/build/outputs/bundle/ 2>/dev/null || echo "Bundle dir not found"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: party-quest-app/app/build/outputs/apk/debug/app-debug.apk
+          path: party-quest-app/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: warn
-          retention-days: 30
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-aab
+          path: party-quest-app/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
+
+      - name: Upload Keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-keystore
+          path: partyquest.keystore
+
+      - name: Upload SHA-256
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256-fingerprint
+          path: sha256.txt
