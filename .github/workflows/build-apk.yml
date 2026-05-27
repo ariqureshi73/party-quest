@@ -11,8 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Java 11
         uses: actions/setup-java@v4
@@ -25,93 +24,64 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Cordova & Android tools
+        run: |
+          npm install -g cordova
+          # Use pre-installed Android SDK
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 
-      - name: Install Cordova
-        run: npm install -g cordova
+      - name: Create Cordova project
+        run: |
+          cordova create party-quest-twa app.partyquest.ttrpg "Party Quest"
+          cd party-quest-twa
+          cordova platform add android
+          
+      - name: Copy web app into Cordova
+        run: |
+          cp ../index.html ./party-quest-twa/www/index.html
+          cp ../manifest.json ./party-quest-twa/www/manifest.json
 
       - name: Generate keystore
         run: |
           keytool -genkeypair \
             -alias partyquest \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -dname "CN=Party Quest,OU=App,O=PartyQuest,L=Camas,ST=WA,C=US" \
             -noprompt
 
       - name: Print SHA-256 fingerprint
         run: |
           echo "====== SHA-256 FINGERPRINT ======"
           keytool -list -v \
-            -keystore partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -alias partyquest \
             -storepass partyquest123 | grep "SHA256:"
           echo "================================="
 
-      - name: Create Cordova project
-        run: cordova create partyquest app.partyquest.ttrpg "Party Quest"
-
-      - name: Copy web files
-        run: |
-          cp index.html partyquest/www/
-          cp manifest.json partyquest/www/
-          mkdir -p partyquest/www/assets
-          cp -r assets/* partyquest/www/assets/ || true
-
-      - name: Add Android platform
-        working-directory: ./partyquest
-        run: cordova platform add android
-
-      - name: Configure signing
-        run: |
-          cat > partyquest/build.json << 'JSON'
-          {
-            "android": {
-              "release": {
-                "keystore": "partyquest.keystore",
-                "storePassword": "partyquest123",
-                "alias": "partyquest",
-                "password": "partyquest123",
-                "keystorePath": "$GITHUB_WORKSPACE"
-              }
-            }
-          }
-          JSON
-
       - name: Build APK (release)
-        working-directory: ./partyquest
-        run: cordova build android --release -- --storePassword=partyquest123 --password=partyquest123 --keystore=$GITHUB_WORKSPACE/partyquest.keystore --alias=partyquest
-
-      - name: Build AAB (bundle for Play Store)
-        working-directory: ./partyquest
+        working-directory: ./party-quest-twa
         run: |
-          cd platforms/android && ./gradlew bundleRelease \
-            -Dorg.gradle.project.storeFile=$GITHUB_WORKSPACE/partyquest.keystore \
-            -Dorg.gradle.project.storePassword=partyquest123 \
-            -Dorg.gradle.project.keyAlias=partyquest \
-            -Dorg.gradle.project.keyPassword=partyquest123
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          cordova build android --release \
+            --keystore=$GITHUB_WORKSPACE/partyquest.keystore \
+            --storePassword=partyquest123 \
+            --alias=partyquest \
+            --password=partyquest123
 
-      - name: List build outputs
+      - name: List generated APK
         run: |
-          echo "=== Searching for APK/AAB files ==="
-          find partyquest/platforms/android -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20
+          find ./party-quest-twa -name "*.apk" -type f
+          ls -lh ./party-quest-twa/platforms/android/app/build/outputs/apk/release/ || echo "Release APK not found"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: partyquest/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Upload AAB (Play Store)
-        uses: actions/upload-artifact@v4
-        with:
-          name: party-quest-aab
-          path: partyquest/platforms/android/app/build/outputs/bundle/release/app-release.aab
+          path: party-quest-twa/platforms/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: warn
           retention-days: 30
 
