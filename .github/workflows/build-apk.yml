@@ -39,32 +39,74 @@ jobs:
           keytool -genkeypair \
             -alias partyquest \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US"
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -noprompt
 
       - name: Print SHA-256 fingerprint
         run: |
           echo "====== SHA-256 FINGERPRINT ======"
           keytool -list -v \
-            -keystore partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -alias partyquest \
             -storepass partyquest123 | grep "SHA256:"
           echo "================================="
 
-      - name: Build APK + AAB
+      - name: Init Bubblewrap (non-interactive)
         run: |
-          bubblewrap init --manifest https://ariqureshi73.github.io/party-quest/manifest.json --directory ./twa
-          cd twa && bubblewrap build
+          # Pipe 'n' to decline JDK install (we already have Java 17)
+          # Then answer remaining prompts with defaults
+          printf 'n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | \
+            bubblewrap init \
+              --manifest https://ariqureshi73.github.io/party-quest/manifest.json \
+              --directory ./twa
         env:
           BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
+
+      - name: Patch TWA manifest with keystore config
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          
+          manifest_path = './twa/twa-manifest.json'
+          with open(manifest_path) as f:
+              m = json.load(f)
+          
+          m['signingMode'] = 'local'
+          m['signing'] = {
+              'keystore': os.environ['GITHUB_WORKSPACE'] + '/partyquest.keystore',
+              'keyAlias': 'partyquest',
+              'keyPassword': 'partyquest123',
+              'storePassword': 'partyquest123'
+          }
+          m['packageId'] = 'app.partyquest.ttrpg'
+          m['name'] = 'Party Quest'
+          m['launcherName'] = 'Party Quest'
+          
+          with open(manifest_path, 'w') as f:
+              json.dump(m, f, indent=2)
+          
+          print("Manifest patched:", json.dumps(m, indent=2))
+          PYEOF
+
+      - name: Build APK + AAB
+        working-directory: ./twa
+        run: |
+          printf 'n\n' | bubblewrap build
+        env:
+          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
+
+      - name: List build outputs
+        run: find ./twa -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK/AAB found"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
           path: twa/app-release-signed.apk
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Upload AAB (Play Store)
@@ -72,9 +114,10 @@ jobs:
         with:
           name: party-quest-aab
           path: twa/app-release-bundle.aab
+          if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload keystore backup
+      - name: Upload keystore (save this!)
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
