@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#c9973a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Party Quest"/>
+<title>Party Quest — Find Your Party</title>
+<link rel="manifest" href="/manifest.json"/>
+
+<style>
+/* ── RESET & BASE ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0f0d0a;
+  --surface:   #1a1712;
+  --surface2:  #242019;
+  --border:    #3a3428;
+  --gold:      #c9973a;
+  --gold-light:#e8b84b;
+  --gold-dim:  #7a5a1e;
+  --text:      #e8dcc8;
+  --text-dim:  #8a7d6a;
+  --red:       #c0392b;
+  --green:     #27ae60;
+  --radius:    12px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.5);
+}
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; height: 100vh; overflow: hidden; }
+.screen.active { display: flex; }
+
+/* ── LANDING ── */
+#screen-landing {
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #2a1f0a 0%, #0f0d0a 70%);
+  padding: 24px;
+  text-align: center;
+  gap: 0;
+}
+.landing-logo { font-size: 56px; margin-bottom: 8px; }
+.landing-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+.landing-sub {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  margin-bottom: 40px;
+}
+.landing-btns { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+.btn { 
+  padding: 14px 24px; 
+  border-radius: var(--radius); 
+  font-size: 15px; 
+  font-weight: 700; 
+  cursor: pointer; 
+  border: none; 
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+.btn:active { transform: scale(0.97); }
+.btn-gold { background: var(--gold); color: #0f0d0a; }
+.btn-gold:hover { background: var(--gold-light); }
+.btn-outline { background: transparent; color: var(--gold); border: 2px solid var(--gold-dim); }
+.btn-outline:hover { border-color: var(--gold); }
+.btn-ghost { background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 400; padding: 8px; }
+.btn-sm { padding: 9px 18px; font-size: 13px; }
+.btn-danger { background: var(--red); color: white; }
+.btn-full { width: 100%; }
+
+/* ── ONBOARDING ── */
+#screen-onboard {
+  background: var(--bg);
+}
+.onboard-header {
+  padding: 20px 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.onboard-back {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+.onboard-progress {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.onboard-progress-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.onboard-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px;
+}
+.onboard-step { display: none; }
+.onboard-step.active { display: block; }
+.step-title { font-size: 22px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+.step-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; }
+
+/* ── FORM ELEMENTS ── */
+.field { margin-bottom: 20px; }
+.field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.field input, .field textarea, .field select {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 15px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--gold); }
+.field textarea { resize: none; min-height: 80px; }
+.field select option { background: var(--surface2); }
+
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  transition: all 0.15s;
+}
+.chip.selected { background: var(--gold); color: #0f0d0a; border-color: var(--gold); }
+.chip:active { transform: scale(0.95); }
+
+/* Avatar upload */
+.avatar-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.avatar-zone:hover { border-color: var(--gold-dim); }
+.avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-dim);
+  background: var(--surface2);
+}
+.avatar-hint { font-size: 13px; color: var(--text-dim); text-align: center; }
+.avatar-hint a { color: var(--gold); text-decoration: none; }
+#avatar-file-input { display: none; }
+
+.onboard-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* ── MAIN APP ── */
+#screen-app {
+  background: var(--bg);
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.app-logo { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: -0.5px; }
+.header-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-dim);
+  cursor: pointer;
+}
+.app-content { flex: 1; overflow: hidden; position: relative; }
+.view { display: none; height: 100%; overflow-y: auto; }
+.view.active { display: block; }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+}
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+  transition: color 0.15s;
+  letter-spacing: 0.3px;
+  position: relative;
+}
+.nav-btn .nav-icon { font-size: 22px; }
+.nav-btn.active { color: var(--gold); }
+.nav-badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 18px);
+  background: var(--red);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* ── SWIPE VIEW ── */
+#view-swipe {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+}
+#view-swipe.active { display: flex; }
+
+.swipe-counter {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.swipe-counter span { color: var(--gold); font-weight: 700; }
+
+.deck-container {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  height: 420px;
+  flex-shrink: 0;
+}
+.quest-card {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.1s;
+  display: flex;
+  flex-direction: column;
+}
+.quest-card:active { cursor: grabbing; }
+.quest-card.gone { display: none; }
+.card-avatar {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+.card-body { padding: 16px; flex: 1; }
+.card-name { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.card-role { font-size: 13px; color: var(--gold); font-weight: 600; margin-top: 2px; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.card-tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+.card-tag.gold { background: rgba(201,151,58,0.15); color: var(--gold); border-color: var(--gold-dim); }
+.card-location { font-size: 12px; color: var(--text-dim); margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+
+/* Swipe indicators */
+.swipe-yes {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: var(--green);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 2px solid white;
+  opacity: 0;
+  transform: rotate(-20deg);
+  pointer-events: none;
+}
+.swipe-no {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: var(--red);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 2px solid white;
+  opacity: 0;
+  transform: rotate(20deg);
+  pointer-events: none;
+}
+
+.swipe-actions { display: flex; gap: 24px; align-items: center; }
+.swipe-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.swipe-btn:active { transform: scale(0.9); }
+.swipe-btn-pass { background: var(--surface2); }
+.swipe-btn-like { background: var(--green); }
+
+.empty-deck {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 20px;
+}
+.empty-deck.show { display: flex; }
+.empty-icon { font-size: 48px; }
+.empty-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.empty-sub { font-size: 14px; color: var(--text-dim); }
+
+/* Swipe limit wall */
+.limit-wall {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  max-width: 320px;
+  width: 100%;
+}
+.limit-wall.show { display: flex; }
+.limit-icon { font-size: 48px; }
+.limit-title { font-size: 20px; font-weight: 800; color: var(--gold); }
+.limit-sub { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+.limit-perks { 
+  background: var(--surface2); 
+  border-radius: 10px; 
+  padding: 14px; 
+  width: 100%;
+  text-align: left;
+}
+.limit-perks h4 { font-size: 13px; color: var(--gold); font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.perk-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); margin-bottom: 8px; }
+.perk-item:last-child { margin-bottom: 0; }
+
+/* ── MATCHES VIEW ── */
+#view-matches { padding: 20px; }
+.view-title { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 16px; }
+.match-list { display: flex; flex-direction: column; gap: 10px; }
+.match-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.match-item:hover { border-color: var(--gold-dim); }
+.match-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-dim);
+  flex-shrink: 0;
+}
+.match-info { flex: 1; min-width: 0; }
+.match-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.match-preview { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match-time { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+.unread-dot { width: 8px; height: 8px; background: var(--gold); border-radius: 50%; flex-shrink: 0; }
+
+/* ── CHAT VIEW ── */
+#screen-chat {
+  background: var(--bg);
+}
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.chat-back { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; padding: 4px; }
+.chat-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-dim); }
+.chat-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 75%; display: flex; flex-direction: column; gap: 3px; }
+.msg.mine { align-self: flex-end; align-items: flex-end; }
+.msg.theirs { align-self: flex-start; align-items: flex-start; }
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.msg.mine .msg-bubble { background: var(--gold); color: #0f0d0a; border-bottom-right-radius: 4px; }
+.msg.theirs .msg-bubble { background: var(--surface2); color: var(--text); border-bottom-left-radius: 4px; }
+.msg-time { font-size: 10px; color: var(--text-dim); }
+.chat-input-area {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.chat-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  color: var(--text);
+  font-size: 14px;
+  padding: 10px 16px;
+  outline: none;
+  font-family: inherit;
+}
+.chat-input:focus { border-color: var(--gold); }
+.chat-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #0f0d0a;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── GAMES VIEW ── */
+#view-games { padding: 20px; }
+.games-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.game-list { display: flex; flex-direction: column; gap: 12px; }
+.game-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+}
+.game-card-header { padding: 14px 14px 10px; }
+.game-card-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.game-card-gm { font-size: 13px; color: var(--gold); margin-top: 2px; }
+.game-card-body { padding: 0 14px 14px; }
+.game-card-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
+.game-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.game-tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+.game-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+}
+.game-spots { font-size: 12px; color: var(--text-dim); }
+.game-spots span { color: var(--green); font-weight: 700; }
+
+/* Games locked banner */
+.dm-locked {
+  background: linear-gradient(135deg, rgba(201,151,58,0.1), rgba(201,151,58,0.05));
+  border: 1.5px solid var(--gold-dim);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.dm-locked h3 { font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+.dm-locked p { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+/* ── PROFILE VIEW ── */
+#view-profile { padding: 20px; }
+.profile-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.profile-banner {
+  height: 80px;
+  background: linear-gradient(135deg, #2a1f0a, #1a1410);
+}
+.profile-content { padding: 0 16px 16px; }
+.profile-avatar-wrap { margin-top: -36px; margin-bottom: 12px; position: relative; display: inline-block; }
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--bg);
+}
+.profile-name { font-size: 20px; font-weight: 800; color: var(--text); }
+.profile-role { font-size: 13px; color: var(--gold); font-weight: 600; margin-top: 2px; }
+.profile-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+.tier-free { background: rgba(138,125,106,0.2); color: var(--text-dim); }
+.tier-dm { background: rgba(201,151,58,0.2); color: var(--gold); }
+.profile-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+
+.section-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.section-label { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+/* ── UPGRADE VIEW ── */
+#view-upgrade { padding: 20px; }
+.upgrade-hero {
+  text-align: center;
+  padding: 32px 20px;
+  background: linear-gradient(135deg, rgba(201,151,58,0.15), rgba(201,151,58,0.05));
+  border-radius: 16px;
+  border: 1.5px solid var(--gold-dim);
+  margin-bottom: 20px;
+}
+.upgrade-icon { font-size: 48px; margin-bottom: 12px; }
+.upgrade-title { font-size: 24px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
+.upgrade-price { font-size: 32px; font-weight: 800; color: var(--text); }
+.upgrade-price span { font-size: 16px; font-weight: 400; color: var(--text-dim); }
+.upgrade-perks { margin-bottom: 20px; }
+.perk-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.perk-row:last-child { border-bottom: none; }
+.perk-icon { font-size: 22px; flex-shrink: 0; }
+.perk-text h4 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.perk-text p { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 1000;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 20px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+.modal-title { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 16px; }
+
+/* ── MATCH CELEBRATION ── */
+.match-celebrate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 2000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 32px;
+}
+.match-celebrate.show { display: flex; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.celebrate-avatars { display: flex; align-items: center; gap: -16px; }
+.celebrate-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--gold);
+}
+.celebrate-title { font-size: 28px; font-weight: 800; color: var(--gold); }
+.celebrate-sub { font-size: 15px; color: var(--text-dim); }
+.celebrate-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid var(--border);
+  z-index: 3000;
+  transition: transform 0.3s ease;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── LOADER ── */
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── UPGRADE TEASER on cards ── */
+.card-locked-section {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(201,151,58,0.08);
+  border-radius: 8px;
+  border: 1px dashed var(--gold-dim);
+}
+.card-locked-label { font-size: 11px; color: var(--gold-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+.card-locked-items { display: flex; flex-direction: column; gap: 4px; }
+.card-locked-item { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.card-locked-blur { filter: blur(4px); pointer-events: none; user-select: none; }
+
+/* ── UTILITY ── */
+.flex-row       { display:flex; align-items:center; }
+.flex-row-gap   { display:flex; align-items:center; gap:10px; }
+.flex-col-gap   { display:flex; flex:1; flex-direction:column; }
+.text-dim-sm    { font-size:13px; color:var(--text-dim); }
+.text-dim-xs    { font-size:12px; color:var(--text-dim); }
+.text-gold-xs   { font-size:11px; color:var(--gold); font-weight:700; }
+.mt-8           { margin-top:8px; }
+.mt-12          { margin-top:12px; }
+.blurred        { filter:blur(4px); user-select:none; }
+.dm-teaser-box  { margin-top:10px; padding:10px; background:rgba(201,151,58,0.08); border-radius:8px; border:1px solid rgba(201,151,58,0.2); }
+.lock-teaser-box{ margin-top:10px; padding:10px; background:rgba(58,52,40,0.5); border-radius:8px; border:1px solid rgba(255,255,255,0.06); }
+.empty-state    { text-align:center; padding:40px 20px; color:var(--text-dim); }
+.empty-state-icon { font-size:40px; margin-bottom:12px; }
+.empty-state-title { font-weight:700; color:var(--text); margin-bottom:6px; }
+.empty-state-sub  { font-size:13px; }
+</style>
+</head>
+
+<body>
+
+<!-- ══════════════════════════════════════
+     SCREEN: LANDING
+══════════════════════════════════════ -->
+<div id="screen-landing" class="screen active">
+  <div class="landing-logo">🎲</div>
+  <h1 class="landing-title">Party Quest</h1>
+  <p class="landing-sub">Find your adventuring party.<br/>Swipe. Match. Roll dice together.</p>
+
+  <div class="landing-btns">
+    <button class="btn btn-gold btn-full" onclick="startOnboarding()">⚔️ Join the Tavern</button>
+    <button class="btn btn-outline btn-full" onclick="showLogin()">📜 I have an account</button>
+  </div>
+
+  <button class="btn btn-ghost" style="margin-top:24px;" onclick="showUpgradePreview()">👑 See DM Tier Perks</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: ONBOARDING
+══════════════════════════════════════ -->
+<div id="screen-onboard" class="screen">
+  <div class="onboard-header">
+    <button class="onboard-back" onclick="onboardBack()">←</button>
+    <div class="onboard-progress">
+      <div class="onboard-progress-fill" id="ob-progress" style="width:20%"></div>
+    </div>
+    <span style="font-size:13px;color:var(--text-dim);" id="ob-step-label">1 / 5</span>
+  </div>
+
+  <div class="onboard-body">
+
+    <!-- Step 1: Name + Email -->
+    <div class="onboard-step active" id="ob-step-1">
+      <div class="step-title">Create your adventurer</div>
+      <div class="step-sub">What should the tavern call you?</div>
+      <div class="field">
+        <label>Adventurer Name</label>
+        <input type="text" id="ob-name" placeholder="e.g. ThunderBard, ElvenRogue99" maxlength="30"/>
+      </div>
+      <div class="field">
+        <label>Email (your sending stone)</label>
+        <input type="email" id="ob-email" placeholder="you@example.com"/>
+      </div>
+    </div>
+
+    <!-- Step 2: Role + Format -->
+    <div class="onboard-step" id="ob-step-2">
+      <div class="step-title">Your role at the table</div>
+      <div class="step-sub">How do you like to play?</div>
+      <div class="field">
+        <label>Role</label>
+        <div class="chip-group" id="ob-role-chips">
+          <button class="chip" data-val="Player" onclick="selectOne(this,'ob-role-chips')">🎲 Player</button>
+          <button class="chip" data-val="Dungeon Master" onclick="selectOne(this,'ob-role-chips')">🧙 Dungeon Master</button>
+          <button class="chip" data-val="Both" onclick="selectOne(this,'ob-role-chips')">⚡ Both</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Play Format</label>
+        <div class="chip-group" id="ob-format-chips">
+          <button class="chip" data-val="Online" onclick="selectOne(this,'ob-format-chips')">💻 Online</button>
+          <button class="chip" data-val="In-Person" onclick="selectOne(this,'ob-format-chips')">🏠 In-Person</button>
+          <button class="chip" data-val="Both" onclick="selectOne(this,'ob-format-chips')">✨ Both</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Games + Playstyle -->
+    <div class="onboard-step" id="ob-step-3">
+      <div class="step-title">What do you play?</div>
+      <div class="step-sub">Pick all that apply.</div>
+      <div class="field">
+        <label>Game Systems</label>
+        <div class="chip-group" id="ob-games-chips">
+          <button class="chip" data-val="D&D 5e" onclick="selectMany(this)">D&amp;D 5e</button>
+          <button class="chip" data-val="Pathfinder 2e" onclick="selectMany(this)">Pathfinder 2e</button>
+          <button class="chip" data-val="Call of Cthulhu" onclick="selectMany(this)">Call of Cthulhu</button>
+          <button class="chip" data-val="Blades in the Dark" onclick="selectMany(this)">Blades in the Dark</button>
+          <button class="chip" data-val="Vampire: The Masquerade" onclick="selectMany(this)">Vampire: TM</button>
+          <button class="chip" data-val="Shadowrun" onclick="selectMany(this)">Shadowrun</button>
+          <button class="chip" data-val="OSR" onclick="selectMany(this)">OSR</button>
+          <button class="chip" data-val="Starfinder" onclick="selectMany(this)">Starfinder</button>
+          <button class="chip" data-val="Other" onclick="selectMany(this)">Other</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Playstyle</label>
+        <div class="chip-group" id="ob-style-chips">
+          <button class="chip" data-val="Roleplay-heavy" onclick="selectOne(this,'ob-style-chips')">🎭 Roleplay-heavy</button>
+          <button class="chip" data-val="Combat-heavy" onclick="selectOne(this,'ob-style-chips')">⚔️ Combat-heavy</button>
+          <button class="chip" data-val="Balanced" onclick="selectOne(this,'ob-style-chips')">⚖️ Balanced</button>
+          <button class="chip" data-val="Sandbox" onclick="selectOne(this,'ob-style-chips')">🗺️ Sandbox</button>
+          <button class="chip" data-val="Story-driven" onclick="selectOne(this,'ob-style-chips')">📖 Story-driven</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Location + Avatar -->
+    <div class="onboard-step" id="ob-step-4">
+      <div class="step-title">Where are you questing from?</div>
+      <div class="step-sub">City helps match nearby adventurers for in-person games.</div>
+      <div class="field">
+        <label>City (optional)</label>
+        <input type="text" id="ob-city" placeholder="e.g. Portland, OR"/>
+      </div>
+      <div class="field">
+        <label>Avatar</label>
+        <div class="avatar-zone" onclick="document.getElementById('avatar-file-input').click()">
+          <img id="ob-avatar-preview" class="avatar-preview" src="https://api.dicebear.com/7.x/adventurer/svg?seed=default&backgroundColor=2a1f0a" alt="avatar"/>
+          <div class="avatar-hint">
+            Tap to upload a photo<br/>
+            <strong style="color:var(--text);">Or build a free avatar:</strong><br/>
+            <a href="https://picrew.me" target="_blank" onclick="event.stopPropagation()">🎨 Picrew.me</a> &nbsp;·&nbsp;
+            <a href="https://avatarmaker.com" target="_blank" onclick="event.stopPropagation()">🧙 AvatarMaker.com</a><br/>
+            <span style="font-size:11px;margin-top:4px;display:block;">Build your avatar there, screenshot it, then upload here</span>
+          </div>
+        </div>
+        <input type="file" id="avatar-file-input" accept="image/*" onchange="handleAvatarUpload(this)"/>
+      </div>
+    </div>
+
+    <!-- Step 5: Review -->
+    <div class="onboard-step" id="ob-step-5">
+      <div class="step-title">Ready to enter the tavern?</div>
+      <div class="step-sub">Free adventurers get 5 swipes per day. Upgrade to DM tier for unlimited access and the ability to host games.</div>
+      <div id="ob-summary" style="background:var(--surface2);border-radius:var(--radius);padding:16px;margin-bottom:20px;border:1.5px solid var(--border);"></div>
+      <div style="background:rgba(201,151,58,0.08);border-radius:var(--radius);padding:14px;border:1px dashed var(--gold-dim);margin-bottom:8px;">
+        <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:8px;">🆓 FREE TIER INCLUDES:</div>
+        <div style="font-size:13px;color:var(--text-dim);line-height:1.8;">✓ Browse adventurer profiles<br/>✓ 5 swipes per day<br/>✓ Message your matches<br/>✓ View posted game sessions</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="onboard-footer">
+    <button class="btn btn-gold btn-full" id="ob-next-btn" onclick="obNext()">Continue →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: MAIN APP
+══════════════════════════════════════ -->
+<div id="screen-app" class="screen">
+  <div class="app-header">
+    <div class="app-logo">🎲 Party Quest</div>
+    <div class="flex-row-gap">
+      <img id="header-avatar" class="header-avatar" src="" alt="me" onclick="navTo('profile')"/>
+    </div>
+  </div>
+
+  <div class="app-content">
+
+    <!-- SWIPE VIEW -->
+    <div id="view-swipe" class="view active">
+      <div class="swipe-counter" id="swipe-counter"></div>
+
+      <div class="deck-container" id="deck-container">
+        <!-- cards injected here -->
+      </div>
+
+      <div class="empty-deck" id="empty-deck">
+        <div class="empty-icon">🏰</div>
+        <div class="empty-title">The tavern is quiet...</div>
+        <div class="empty-sub">No more adventurers to browse right now.<br/>Check back soon!</div>
+      </div>
+
+      <div class="limit-wall" id="limit-wall">
+        <div class="limit-icon">🔒</div>
+        <div class="limit-title">Daily Limit Reached</div>
+        <div class="limit-sub">Free adventurers get 5 swipes per day. Upgrade to DM Tier for unlimited swiping and the ability to host your own game sessions.</div>
+        <div class="limit-perks">
+          <h4>⚔️ DM Tier Unlocks</h4>
+          <div class="perk-item">♾️ Unlimited swipes every day</div>
+          <div class="perk-item">🏰 Post & host game sessions</div>
+          <div class="perk-item">📋 Full adventurer profiles</div>
+          <div class="perk-item">👑 DM badge on your profile</div>
+        </div>
+        <button class="btn btn-gold btn-full" onclick="navTo('upgrade')">👑 Upgrade to DM Tier</button>
+        <div style="font-size:12px;color:var(--text-dim);">Resets daily at midnight</div>
+      </div>
+
+      <div class="swipe-actions" id="swipe-actions">
+        <button class="swipe-btn swipe-btn-pass" onclick="doSwipe('pass')" title="Pass">✕</button>
+        <button class="swipe-btn swipe-btn-like" onclick="doSwipe('like')" title="Like">♥</button>
+      </div>
+    </div>
+
+    <!-- MATCHES VIEW -->
+    <div id="view-matches" class="view">
+      <div class="view-title">⚔️ Your Matches</div>
+      <div id="match-list" class="match-list">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- GAMES VIEW -->
+    <div id="view-games" class="view">
+      <div class="games-header">
+        <div class="view-title" style="margin:0;">🏰 Game Finder</div>
+        <button class="btn btn-sm btn-gold" id="post-game-btn" onclick="openPostGame()" style="display:none;">+ Post Game</button>
+      </div>
+      <div id="games-dm-banner" class="dm-locked" style="display:none;">
+        <h3>🧙 Want to host a game?</h3>
+        <p>Upgrade to DM Tier to post sessions, set your schedule, and find players who match your style.</p>
+        <button class="btn btn-gold btn-sm" style="margin-top:12px;" onclick="navTo('upgrade')">Upgrade to DM Tier</button>
+      </div>
+      <div id="game-list" class="game-list">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- PROFILE VIEW -->
+    <div id="view-profile" class="view">
+      <div id="profile-content">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- UPGRADE VIEW -->
+    <div id="view-upgrade" class="view">
+      <div class="upgrade-hero">
+        <div class="upgrade-icon">👑</div>
+        <div class="upgrade-title">DM Tier</div>
+        <div class="upgrade-price">$1.99<span>/month</span></div>
+        <div style="font-size:13px;color:var(--text-dim);margin-top:4px;">or $79/year — save 34%</div>
+      </div>
+
+      <div class="upgrade-perks">
+        <div class="perk-row">
+          <div class="perk-icon">♾️</div>
+          <div class="perk-text">
+            <h4>Unlimited Swipes</h4>
+            <p>No daily limits. Browse every adventurer in the tavern.</p>
+          </div>
+        </div>
+        <div class="perk-row">
+          <div class="perk-icon">🏰</div>
+          <div class="perk-text">
+            <h4>Host Game Sessions</h4>
+            <p>Post your campaigns, one-shots, and ongoing games. Players can request to join directly.</p>
+          </div>
+        </div>
+        <div class="perk-row">
+          <div class="perk-icon">📋</div>
+          <div class="perk-text">
+            <h4>Full Profile Fields</h4>
+            <p>Add your bio, schedule, GM rate, platforms, and experience level. Stand out in the deck.</p>
+          </div>
+        </div>
+        <div class="perk-row">
+          <div class="perk-icon">👑</div>
+          <div class="perk-text">
+            <h4>DM Badge</h4>
+            <p>A gold badge on your profile showing you're a verified, active Dungeon Master.</p>
+          </div>
+        </div>
+        <div class="perk-row">
+          <div class="perk-icon">⚡</div>
+          <div class="perk-text">
+            <h4>Priority in the Deck</h4>
+            <p>Your profile appears first in other adventurers' swipe decks.</p>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-gold btn-full" id="upgrade-btn" onclick="startUpgrade()" style="margin-bottom:12px;">👑 Upgrade Now — $1.99/mo</button>
+      <button class="btn btn-ghost btn-full" onclick="navTo('swipe')">Maybe later</button>
+    </div>
+
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-swipe" onclick="navTo('swipe')">
+      <span class="nav-icon">🃏</span>Browse
+    </button>
+    <button class="nav-btn" id="nav-matches" onclick="navTo('matches')">
+      <span class="nav-icon">⚔️</span>Matches
+      <span class="nav-badge" id="matches-badge" style="display:none;"></span>
+    </button>
+    <button class="nav-btn" id="nav-games" onclick="navTo('games')">
+      <span class="nav-icon">🏰</span>Games
+    </button>
+    <button class="nav-btn" id="nav-profile" onclick="navTo('profile')">
+      <span class="nav-icon">📜</span>Profile
+    </button>
+    <button class="nav-btn" id="nav-upgrade" onclick="navTo('upgrade')">
+      <span class="nav-icon">👑</span>Upgrade
+    </button>
+  </nav>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: CHAT
+══════════════════════════════════════ -->
+<div id="screen-chat" class="screen">
+  <div class="chat-header">
+    <button class="chat-back" onclick="showScreen('app')">←</button>
+    <img id="chat-partner-avatar" class="chat-avatar" src="" alt=""/>
+    <div>
+      <div class="chat-name" id="chat-partner-name"></div>
+      <div style="font-size:11px;color:var(--text-dim);">Party Quest</div>
+    </div>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-area">
+    <input class="chat-input" id="chat-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendMessage()"/>
+    <button class="chat-send" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     MODAL: LOGIN
+══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-login">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📜 Sign Back In</div>
+    <div class="field">
+      <label>Your Email</label>
+      <input type="email" id="login-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="doLogin()">Enter the Tavern →</button>
+    <button class="btn btn-ghost btn-full mt-8" onclick="closeModal('modal-login')">Cancel</button>
+  </div>
+</div>
+
+<!-- MODAL: POST GAME -->
+<div class="modal-overlay" id="modal-post-game">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🏰 Post a Game Session</div>
+    <div class="field">
+      <label>Campaign Title</label>
+      <input type="text" id="pg-title" placeholder="e.g. Curse of Strahd — Seeking 4 Heroes"/>
+    </div>
+    <div class="field">
+      <label>Game System</label>
+      <select id="pg-system">
+        <option value="D&D 5e">D&D 5e</option>
+        <option value="Pathfinder 2e">Pathfinder 2e</option>
+        <option value="Call of Cthulhu">Call of Cthulhu</option>
+        <option value="Blades in the Dark">Blades in the Dark</option>
+        <option value="Vampire: The Masquerade">Vampire: The Masquerade</option>
+        <option value="Shadowrun">Shadowrun</option>
+        <option value="OSR">OSR</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="pg-desc" placeholder="Tell players what to expect. Tone, themes, commitment level..."></textarea>
+    </div>
+    <div class="field flex-row-gap" style="gap:12px;">
+      <div class="flex-col-gap">
+        <label>Session Type</label>
+        <select id="pg-type">
+          <option value="Campaign">Campaign</option>
+          <option value="One-shot">One-shot</option>
+          <option value="Westmarches">Westmarches</option>
+        </select>
+      </div>
+      <div class="flex-col-gap">
+        <label>Format</label>
+        <select id="pg-format">
+          <option value="Online">Online</option>
+          <option value="In-Person">In-Person</option>
+          <option value="Both">Both</option>
+        </select>
+      </div>
+    </div>
+    <div class="field flex-row-gap" style="gap:12px;">
+      <div class="flex-col-gap">
+        <label>Max Players</label>
+        <input type="number" id="pg-max" value="5" min="2" max="8"/>
+      </div>
+      <div class="flex-col-gap">
+        <label>Experience</label>
+        <select id="pg-exp">
+          <option value="All Welcome">All Welcome</option>
+          <option value="Beginner">Beginner</option>
+          <option value="Intermediate">Intermediate</option>
+          <option value="Experienced">Experienced</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="submitPostGame()">🏰 Post Session</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="closeModal('modal-post-game')">Cancel</button>
+  </div>
+</div>
+
+<!-- MODAL: JOIN REQUEST -->
+<div class="modal-overlay" id="modal-join">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✉️ Request to Join</div>
+    <div id="join-game-title" style="font-size:14px;color:var(--text-dim);margin-bottom:16px;"></div>
+    <div class="field">
+      <label>Message to the DM</label>
+      <textarea id="join-message" placeholder="Tell them a bit about yourself and why you'd be a great fit..."></textarea>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="submitJoinRequest()">Send Request</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="closeModal('modal-join')">Cancel</button>
+  </div>
+</div>
+
+<!-- MATCH CELEBRATION -->
+<div class="match-celebrate" id="match-celebrate">
+  <div style="font-size:48px;">🎉</div>
+  <div class="celebrate-avatars">
+    <img id="cel-avatar-1" class="celebrate-avatar" src="" alt="" style="margin-right:-16px;z-index:1;"/>
+    <img id="cel-avatar-2" class="celebrate-avatar" src="" alt="" style="margin-left:-16px;"/>
+  </div>
+  <div class="celebrate-title">It's a Match!</div>
+  <div class="celebrate-sub" id="cel-name">You and <strong></strong> both swiped right!</div>
+  <div class="celebrate-btns">
+    <button class="btn btn-gold btn-full" onclick="openCelebrationChat()">💬 Send a Message</button>
+    <button class="btn btn-outline btn-full" onclick="dismissCelebration()">Keep Browsing</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════
+     APP JAVASCRIPT
+══════════════════════════════════════ -->
+<script>
+const API = 'https://earl-38bdc41d.base44.app/functions/partyQuestApi';
+const FREE_SWIPE_LIMIT = 5;
+
+// ── State ──────────────────────────────
+const state = {
+  player: null,       // current user's QuestPlayer record
+  deck: [],           // profiles loaded for swiping
+  deckIdx: 0,
+  matches: [],
+  currentMatchId: null,
+  currentCelebration: null,
+  pendingAvatarDataUrl: null,
+};
+
+// ── Utility ────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function selectOne(el, groupId) {
+  document.querySelectorAll('#' + groupId + ' .chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function selectMany(el) {
+  el.classList.toggle('selected');
+}
+
+function getSelected(groupId) {
+  const chips = document.querySelectorAll('#' + groupId + ' .chip.selected');
+  return Array.from(chips).map(c => c.dataset.val);
+}
+
+// ── API ────────────────────────────────
+async function apiGet(entity, query = {}) {
+  const params = new URLSearchParams({ entity, ...query });
+  const res = await fetch(`${API}?${params}`);
+  if (!res.ok) throw new Error('API error ' + res.status);
+  return res.json();
+}
+
+
+async function apiCreate(entity, data) {
+  const res = await fetch(`${API}?entity=${encodeURIComponent(entity)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('API error ' + res.status);
+  return res.json();
+}
+
+async function apiUpdate(entity, id, data) {
+  const res = await fetch(`${API}?entity=${encodeURIComponent(entity)}&id=${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('API error ' + res.status);
+  return res.json();
+}
+
+// ── Landing ────────────────────────────
+function startOnboarding() {
+  showScreen('onboard');
+  updateObProgress(1, 5);
+}
+
+function showLogin() {
+  openModal('modal-login');
+}
+
+function showUpgradePreview() {
+  // Show upgrade screen without being logged in
+  showScreen('app');
+  // activate upgrade view directly
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-upgrade').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-upgrade').classList.add('active');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  if (!email.includes('@')) { showToast('⚠️ Enter a valid email'); return; }
+  try {
+    const res = await apiGet('QuestPlayer', { email });
+    const players = Array.isArray(res) ? res : (res.data || []);
+    const found = players.find(p => p.email && p.email.toLowerCase() === email);
+    if (!found) { showToast('No account found. Join the tavern first!'); return; }
+    state.player = found;
+    localStorage.setItem('pq_player_id', found.id);
+    closeModal('modal-login');
+    launchApp();
+  } catch(e) {
+    showToast('Error signing in. Try again.');
+  }
+}
+
+// ── Onboarding ─────────────────────────
+let obCurrentStep = 1;
+const OB_STEPS = 5;
+
+function updateObProgress(step, total) {
+  const pct = (step / total) * 100;
+  document.getElementById('ob-progress').style.width = pct + '%';
+  document.getElementById('ob-step-label').textContent = step + ' / ' + total;
+  document.getElementById('ob-next-btn').textContent = step === total ? '⚔️ Enter the Tavern!' : 'Continue →';
+}
+
+function onboardBack() {
+  if (obCurrentStep === 1) { showScreen('landing'); return; }
+  document.getElementById('ob-step-' + obCurrentStep).classList.remove('active');
+  obCurrentStep--;
+  document.getElementById('ob-step-' + obCurrentStep).classList.add('active');
+  updateObProgress(obCurrentStep, OB_STEPS);
+}
+
+function obNext() {
+  // Validate current step
+  if (obCurrentStep === 1) {
+    const name = document.getElementById('ob-name').value.trim();
+    const email = document.getElementById('ob-email').value.trim();
+    if (!name) { showToast('⚠️ Enter your adventurer name'); return; }
+    if (!email.includes('@')) { showToast('⚠️ Enter a valid email'); return; }
+  }
+  if (obCurrentStep === 2) {
+    if (getSelected('ob-role-chips').length === 0) { showToast('⚠️ Pick your role'); return; }
+    if (getSelected('ob-format-chips').length === 0) { showToast('⚠️ Pick a play format'); return; }
+  }
+  if (obCurrentStep === 3) {
+    if (getSelected('ob-games-chips').length === 0) { showToast('⚠️ Pick at least one game system'); return; }
+    if (getSelected('ob-style-chips').length === 0) { showToast('⚠️ Pick a playstyle'); return; }
+  }
+  if (obCurrentStep === 4) {
+    // populate summary for step 5
+    buildObSummary();
+  }
+  if (obCurrentStep === OB_STEPS) {
+    completeSignup();
+    return;
+  }
+  document.getElementById('ob-step-' + obCurrentStep).classList.remove('active');
+  obCurrentStep++;
+  document.getElementById('ob-step-' + obCurrentStep).classList.add('active');
+  updateObProgress(obCurrentStep, OB_STEPS);
+}
+
+function buildObSummary() {
+  const name = document.getElementById('ob-name').value.trim();
+  const role = getSelected('ob-role-chips')[0] || '';
+  const format = getSelected('ob-format-chips')[0] || '';
+  const games = getSelected('ob-games-chips');
+  const style = getSelected('ob-style-chips')[0] || '';
+  const city = document.getElementById('ob-city').value.trim();
+
+  document.getElementById('ob-summary').innerHTML = `
+    <div class="flex-row-gap" style="margin-bottom:14px;">
+      <img src="${document.getElementById('ob-avatar-preview').src}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold-dim);"/>
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--text);">${name}</div>
+        <div style="font-size:13px;color:var(--gold);">${role} · ${format}</div>
+        ${city ? `<div style="font-size:12px;color:var(--text-dim);">📍 ${city}</div>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      ${games.map(g => `<span class="chip selected" style="font-size:11px;padding:4px 10px;">${g}</span>`).join('')}
+      <span class="chip selected" style="font-size:11px;padding:4px 10px;">${style}</span>
+    </div>
+  `;
+}
+
+async function handleAvatarUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.pendingAvatarDataUrl = e.target.result;
+    document.getElementById('ob-avatar-preview').src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function completeSignup() {
+  const btn = document.getElementById('ob-next-btn');
+  btn.textContent = 'Entering the tavern...';
+  btn.disabled = true;
+
+  const name = document.getElementById('ob-name').value.trim();
+  const email = document.getElementById('ob-email').value.trim().toLowerCase();
+  const role = getSelected('ob-role-chips')[0] || 'Player';
+  const format = getSelected('ob-format-chips')[0] || 'Both';
+  const games = getSelected('ob-games-chips');
+  const playstyle = getSelected('ob-style-chips')[0] || 'Balanced';
+  const city = document.getElementById('ob-city').value.trim();
+  const avatarSrc = document.getElementById('ob-avatar-preview').src;
+  const avatarUrl = state.pendingAvatarDataUrl
+    ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}&backgroundColor=2a1f0a`
+    : avatarSrc;
+
+  try {
+    // Check if email already exists
+    const existing = await apiGet('QuestPlayer', { email });
+    const existingPlayers = Array.isArray(existing) ? existing : (existing.data || []);
+    const found = existingPlayers.find(p => p.email && p.email.toLowerCase() === email);
+
+    if (found) {
+      state.player = found;
+      localStorage.setItem('pq_player_id', found.id);
+      launchApp();
+      return;
+    }
+
+    const newPlayer = await apiCreate('QuestPlayer', {
+      display_name: name,
+      email,
+      role,
+      play_format: format,
+      game_systems: games,
+      playstyle,
+      location_city: city,
+      avatar_url: avatarUrl,
+      tier: 'free',
+      swipe_count_today: 0,
+      last_swipe_reset: new Date().toDateString(),
+      profile_complete: true,
+    });
+
+    state.player = newPlayer;
+    localStorage.setItem('pq_player_id', newPlayer.id);
+    launchApp();
+  } catch(e) {
+    btn.textContent = '⚔️ Enter the Tavern!';
+    btn.disabled = false;
+    showToast('Something went wrong. Try again!');
+    console.error(e);
+  }
+}
+
+// ── App Boot ───────────────────────────
+async function boot() {
+  // Try to restore session
+  const savedId = localStorage.getItem('pq_player_id');
+  if (savedId) {
+    try {
+      const res = await fetch(`${API}?entity=QuestPlayer&id=${savedId}`);
+      if (res.ok) {
+        const player = await res.json();
+        if (player && player.id) {
+          state.player = player;
+          launchApp();
+          return;
+        }
+      }
+    } catch(e) { /* fall through to landing */ }
+    localStorage.removeItem('pq_player_id');
+  }
+  showScreen('landing');
+}
+
+function launchApp() {
+  // Reset swipe count if new day
+  const today = new Date().toDateString();
+  if (state.player.last_swipe_reset !== today) {
+    state.player.swipe_count_today = 0;
+    state.player.last_swipe_reset = today;
+    apiUpdate('QuestPlayer', state.player.id, {
+      swipe_count_today: 0,
+      last_swipe_reset: today,
+    }).catch(() => {});
+  }
+
+  // Update header avatar
+  document.getElementById('header-avatar').src = state.player.avatar_url || 
+    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(state.player.display_name)}&backgroundColor=2a1f0a`;
+
+    const upgradeNav = document.getElementById('nav-upgrade');
+  if (state.player.tier === 'dm') {
+    upgradeNav.style.display = 'none';
+  }
+
+  showScreen('app');
+  navTo('swipe');
+  loadDeck();
+}
+
+// ── Navigation ─────────────────────────
+function navTo(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.getElementById('nav-' + view).classList.add('active');
+
+  if (view === 'matches') loadMatches();
+  if (view === 'games') loadGames();
+  if (view === 'profile') loadProfile();
+}
+
+// ── Swipe Deck ─────────────────────────
+async function loadDeck() {
+  try {
+    const res = await apiGet('QuestPlayer');
+    const all = Array.isArray(res) ? res : (res.data || []);
+    // Exclude self
+    state.deck = all.filter(p => p.id !== state.player.id && p.profile_complete);
+    // DM tier profiles first
+    state.deck.sort((a, b) => (b.tier === 'dm' ? 1 : 0) - (a.tier === 'dm' ? 1 : 0));
+    state.deckIdx = 0;
+    renderDeck();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function renderDeck() {
+  const container = document.getElementById('deck-container');
+  const counter = document.getElementById('swipe-counter');
+  const emptyEl = document.getElementById('empty-deck');
+  const limitEl = document.getElementById('limit-wall');
+  const actionsEl = document.getElementById('swipe-actions');
+
+  container.innerHTML = '';
+  emptyEl.classList.remove('show');
+  limitEl.classList.remove('show');
+
+  // Check swipe limit
+  const isDM = state.player.tier === 'dm';
+  const swipesUsed = state.player.swipe_count_today || 0;
+  const swipesLeft = FREE_SWIPE_LIMIT - swipesUsed;
+
+  if (!isDM && swipesLeft <= 0) {
+    container.style.display = 'none';
+    actionsEl.style.display = 'none';
+    counter.style.display = 'none';
+    limitEl.classList.add('show');
+    return;
+  }
+
+  container.style.display = 'block';
+  actionsEl.style.display = 'flex';
+  counter.style.display = 'block';
+
+  if (isDM) {
+    counter.innerHTML = '♾️ <span>Unlimited</span> swipes — DM Tier';
+  } else {
+    counter.innerHTML = `<span>${swipesLeft}</span> of ${FREE_SWIPE_LIMIT} swipes remaining today`;
+  }
+
+  const remaining = state.deck.slice(state.deckIdx);
+  if (remaining.length === 0) {
+    container.style.display = 'none';
+    actionsEl.style.display = 'none';
+    emptyEl.classList.add('show');
+    return;
+  }
+
+  // Render top 3 cards (stacked look)
+  const toRender = remaining.slice(0, 3).reverse();
+  toRender.forEach((profile, stackIdx) => {
+    const card = buildCard(profile, stackIdx === 0); // only top card is interactive
+    container.appendChild(card);
+  });
+}
+
+function buildCard(profile, isTop) {
+  const card = document.createElement('div');
+  card.className = 'quest-card';
+  card.dataset.id = profile.id;
+
+  const isDM = profile.tier === 'dm';
+  const avatarUrl = profile.avatar_url || 
+    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(profile.display_name)}&backgroundColor=2a1f0a`;
+
+  const games = (profile.game_systems || []).slice(0, 3);
+  const gameTags = games.map(g => `<span class="card-tag">${g}</span>`).join('');
+  const dmBadge = isDM ? `<span class="card-tag gold">👑 DM Tier</span>` : '';
+
+  // Locked section (teaser for free-tier profiles)
+  let lockedSection = '';
+  if (isDM) {
+    lockedSection = `
+      <div style="margin-top:10px;padding:10px;background:rgba(201,151,58,0.08);border-radius:8px;border:1px solid var(--gold-dim);">
+        <div class="text-gold-xs" style="margin-bottom:6px;">👑 DM TIER PROFILE</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.5;">${(profile.bio || 'Full bio available').substring(0, 80)}${profile.bio && profile.bio.length > 80 ? '...' : ''}</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">🕐 ${profile.schedule || 'Schedule available'} · 💰 ${profile.gm_rate ? '$'+profile.gm_rate+'/session' : 'Free'}</div>
+      </div>
+    `;
+  } else {
+    lockedSection = `
+      <div style="margin-top:10px;padding:10px;background:rgba(58,52,40,0.5);border-radius:8px;border:1px dashed var(--border);">
+        <div style="font-size:11px;color:var(--text-dim);font-weight:700;margin-bottom:4px;">🔒 UPGRADE TO SEE</div>
+        <div style="font-size:12px;color:var(--text-dim);filter:blur(4px);user-select:none;">Full bio, schedule, platforms, experience level and more hidden content here...</div>
+      </div>
+    `;
+  }
+
+  card.innerHTML = `
+    <img class="card-avatar" src="${avatarUrl}" alt="${profile.display_name}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback&backgroundColor=2a1f0a'"/>
+    <div class="swipe-yes">QUEST!</div>
+    <div class="swipe-no">PASS</div>
+    <div class="card-body">
+      <div class="card-name">${profile.display_name}</div>
+      <div class="card-role">${profile.role || 'Adventurer'} · ${profile.play_format || 'Online'}</div>
+      <div class="card-tags">
+        ${dmBadge}
+        ${gameTags}
+        ${profile.playstyle ? `<span class="card-tag">${profile.playstyle}</span>` : ''}
+      </div>
+      ${profile.location_city ? `<div class="card-location">📍 ${profile.location_city}</div>` : ''}
+      ${lockedSection}
+    </div>
+  `;
+
+  if (isTop) setupSwipe(card);
+  return card;
+}
+
+function setupSwipe(card) {
+  let startX = 0, startY = 0, currentX = 0;
+  let dragging = false;
+
+  function onStart(x, y) {
+    startX = x; startY = y; dragging = true;
+  }
+  function onMove(x) {
+    if (!dragging) return;
+    currentX = x - startX;
+    const rot = currentX * 0.08;
+    card.style.transform = `translateX(${currentX}px) rotate(${rot}deg)`;
+    const yesEl = card.querySelector('.swipe-yes');
+    const noEl = card.querySelector('.swipe-no');
+    if (currentX > 30) { yesEl.style.opacity = Math.min(1, (currentX - 30) / 80); noEl.style.opacity = 0; }
+    else if (currentX < -30) { noEl.style.opacity = Math.min(1, (-currentX - 30) / 80); yesEl.style.opacity = 0; }
+    else { yesEl.style.opacity = 0; noEl.style.opacity = 0; }
+  }
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    if (currentX > 80) { flyOut('like', card); }
+    else if (currentX < -80) { flyOut('pass', card); }
+    else { card.style.transform = ''; card.style.transition = 'transform 0.3s'; setTimeout(() => card.style.transition = '', 300); }
+  }
+
+  card.addEventListener('mousedown', e => onStart(e.clientX, e.clientY));
+  document.addEventListener('mousemove', e => { if (dragging) onMove(e.clientX); });
+  document.addEventListener('mouseup', onEnd);
+  card.addEventListener('touchstart', e => { const t = e.touches[0]; onStart(t.clientX, t.clientY); }, { passive: true });
+  card.addEventListener('touchmove', e => { const t = e.touches[0]; onMove(t.clientX); }, { passive: true });
+  card.addEventListener('touchend', onEnd);
+}
+
+function flyOut(direction, card) {
+  const x = direction === 'like' ? 500 : -500;
+  card.style.transition = 'transform 0.4s ease, opacity 0.4s';
+  card.style.transform = `translateX(${x}px) rotate(${direction === 'like' ? 30 : -30}deg)`;
+  card.style.opacity = '0';
+  setTimeout(() => {
+    card.remove();
+    processSwipe(direction);
+  }, 400);
+}
+
+function doSwipe(direction) {
+  const card = document.querySelector('.quest-card:last-child');
+  if (!card) return;
+  flyOut(direction, card);
+}
+
+async function processSwipe(direction) {
+  const profile = state.deck[state.deckIdx];
+  if (!profile) return;
+
+  state.deckIdx++;
+
+  if (!state.player) return;
+
+  // Increment swipe count for free users
+  if (state.player.tier !== 'dm') {
+    state.player.swipe_count_today = (state.player.swipe_count_today || 0) + 1;
+    apiUpdate('QuestPlayer', state.player.id, {
+      swipe_count_today: state.player.swipe_count_today,
+      last_swipe_reset: new Date().toDateString(),
+    }).catch(() => {});
+  }
+
+  if (direction === 'like') {
+    // Check if there's already a match record
+    try {
+      const existing = await apiGet('QuestMatch', {});
+      const all = Array.isArray(existing) ? existing : (existing.data || []);
+      const theirSwipe = all.find(m =>
+        (m.player1_id === profile.id && m.player2_id === state.player.id && m.player1_swiped === true)
+      );
+
+      if (theirSwipe) {
+        // Mutual match!
+        await apiUpdate('QuestMatch', theirSwipe.id, { player2_swiped: true, matched: true, match_date: new Date().toISOString() });
+        showMatchCelebration(profile, theirSwipe.id);
+      } else {
+        // Record our swipe
+        await apiCreate('QuestMatch', {
+          player1_id: state.player.id,
+          player2_id: profile.id,
+          player1_swiped: true,
+          player2_swiped: false,
+          matched: false,
+        });
+      }
+    } catch(e) { console.error(e); }
+  }
+
+  renderDeck();
+}
+
+// ── Match Celebration ──────────────────
+function showMatchCelebration(profile, matchId) {
+  state.currentCelebration = { profile, matchId };
+  const myAvatar = state.player.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(state.player.display_name)}&backgroundColor=2a1f0a`;
+  const theirAvatar = profile.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(profile.display_name)}&backgroundColor=2a1f0a`;
+  document.getElementById('cel-avatar-1').src = myAvatar;
+  document.getElementById('cel-avatar-2').src = theirAvatar;
+  document.getElementById('cel-name').innerHTML = `You and <strong>${profile.display_name}</strong> both swiped right!`;
+  document.getElementById('match-celebrate').classList.add('show');
+}
+
+function dismissCelebration() {
+  document.getElementById('match-celebrate').classList.remove('show');
+  state.currentCelebration = null;
+}
+
+function openCelebrationChat() {
+  if (!state.currentCelebration) return;
+  dismissCelebration();
+  openChat(state.currentCelebration.matchId, state.currentCelebration.profile);
+}
+
+// ── Matches ────────────────────────────
+async function loadMatches() {
+  const listEl = document.getElementById('match-list');
+  listEl.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await apiGet('QuestMatch', {});
+    const all = Array.isArray(res) ? res : (res.data || []);
+    const myMatches = all.filter(m => m.matched && (m.player1_id === state.player.id || m.player2_id === state.player.id));
+
+    if (myMatches.length === 0) {
+      listEl.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-dim);">
+        <div style="font-size:40px;margin-bottom:12px;">⚔️</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:6px;">No matches yet</div>
+        <div style="font-size:13px;">Keep swiping to find your party!</div>
+      </div>`;
+      return;
+    }
+
+    // Load partner profiles
+    const playersRes = await apiGet('QuestPlayer', {});
+    const players = Array.isArray(playersRes) ? playersRes : (playersRes.data || []);
+    const playerMap = {};
+    players.forEach(p => playerMap[p.id] = p);
+
+    listEl.innerHTML = '';
+    myMatches.forEach(match => {
+      const partnerId = match.player1_id === state.player.id ? match.player2_id : match.player1_id;
+      const partner = playerMap[partnerId];
+      if (!partner) return;
+
+      const avatarUrl = partner.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(partner.display_name)}&backgroundColor=2a1f0a`;
+      const item = document.createElement('div');
+      item.className = 'match-item';
+      item.innerHTML = `
+        <img class="match-avatar" src="${avatarUrl}" alt="${partner.display_name}"/>
+        <div class="match-info">
+          <div class="match-name">${partner.display_name}</div>
+          <div class="match-preview">${partner.role || 'Adventurer'} · ${(partner.game_systems || []).join(', ') || 'Various systems'}</div>
+        </div>
+        <div class="match-time">${timeAgo(match.match_date)}</div>
+      `;
+      item.onclick = () => openChat(match.id, partner);
+      listEl.appendChild(item);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div class="empty-state">Failed to load matches.</div>';
+  }
+}
+
+// ── Chat ───────────────────────────────
+let chatPollInterval = null;
+
+function openChat(matchId, partner) {
+  state.currentMatchId = matchId;
+  const avatarUrl = partner.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(partner.display_name)}&backgroundColor=2a1f0a`;
+  document.getElementById('chat-partner-avatar').src = avatarUrl;
+  document.getElementById('chat-partner-name').textContent = partner.display_name;
+  document.getElementById('chat-messages').innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  showScreen('chat');
+  loadMessages();
+  if (chatPollInterval) clearInterval(chatPollInterval);
+  chatPollInterval = setInterval(loadMessages, 5000);
+}
+
+async function loadMessages() {
+  if (!state.currentMatchId) return;
+  try {
+    const res = await apiGet('QuestMessage', { match_id: state.currentMatchId });
+    const msgs = Array.isArray(res) ? res : (res.data || []);
+    msgs.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    if (msgs.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:14px;">🎲 You matched! Say hello!</div>`;
+      return;
+    }
+    msgs.forEach(msg => {
+      const mine = msg.sender_id === state.player.id;
+      const el = document.createElement('div');
+      el.className = `msg ${mine ? 'mine' : 'theirs'}`;
+      el.innerHTML = `
+        <div class="msg-bubble">${msg.content}</div>
+        <div class="msg-time">${timeAgo(msg.created_date)}</div>
+      `;
+      container.appendChild(el);
+    });
+    container.scrollTop = container.scrollHeight;
+  } catch(e) { console.error(e); }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content || !state.currentMatchId) return;
+  input.value = '';
+  try {
+    await apiCreate('QuestMessage', {
+      match_id: state.currentMatchId,
+      sender_id: state.player.id,
+      sender_name: state.player.display_name,
+      content,
+      read: false,
+    });
+    loadMessages();
+  } catch(e) {
+    showToast('Failed to send. Try again.');
+    input.value = content;
+  }
+}
+
+// ── Games ──────────────────────────────
+async function loadGames() {
+  const listEl = document.getElementById('game-list');
+  const postBtn = document.getElementById('post-game-btn');
+  const dmBanner = document.getElementById('games-dm-banner');
+
+  listEl.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  const isDM = state.player && state.player.tier === 'dm';
+  postBtn.style.display = isDM ? 'block' : 'none';
+  dmBanner.style.display = isDM ? 'none' : 'block';
+
+  try {
+    const res = await apiGet('QuestSession', { status: 'open' });
+    const sessions = Array.isArray(res) ? res : (res.data || []);
+
+    if (sessions.length === 0) {
+      listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim);">
+        <div style="font-size:40px;margin-bottom:12px;">🏰</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:6px;">No games posted yet</div>
+        <div style="font-size:13px;">${isDM ? 'Be the first to post a session!' : 'Check back soon — DMs are preparing their dungeons.'}</div>
+      </div>`;
+      return;
+    }
+
+    listEl.innerHTML = '';
+    sessions.forEach(session => {
+      const card = document.createElement('div');
+      card.className = 'game-card';
+      card.innerHTML = `
+        <div class="game-card-header">
+          <div class="game-card-title">${session.title}</div>
+          <div class="game-card-gm">🧙 ${session.gm_name}</div>
+        </div>
+        <div class="game-card-body">
+          <div class="game-card-desc">${(session.description || '').substring(0, 120)}${(session.description || '').length > 120 ? '...' : ''}</div>
+          <div class="game-meta">
+            <span class="game-tag">${session.game_system}</span>
+            <span class="game-tag">${session.session_type || 'Campaign'}</span>
+            <span class="game-tag">${session.play_format || 'Online'}</span>
+            ${session.experience_level ? `<span class="game-tag">${session.experience_level}</span>` : ''}
+          </div>
+        </div>
+        <div class="game-card-footer">
+          <div class="game-spots">Spots: <span>${session.current_players || 0}/${session.max_players || 5}</span></div>
+          <button class="btn btn-sm btn-gold" data-sid="${session.id}" data-stitle="${session.title||''}" onclick="openJoinModal(this.dataset.sid, this.dataset.stitle)">Request to Join</button>
+        </div>
+      `;
+      listEl.appendChild(card);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div class="empty-state">Failed to load games.</div>';
+  }
+}
+
+function openPostGame() {
+  openModal('modal-post-game');
+}
+
+async function submitPostGame() {
+  const title = document.getElementById('pg-title').value.trim();
+  const desc = document.getElementById('pg-desc').value.trim();
+  if (!title) { showToast('⚠️ Add a title'); return; }
+
+  try {
+    await apiCreate('QuestSession', {
+      gm_id: state.player.id,
+      gm_name: state.player.display_name,
+      title,
+      game_system: document.getElementById('pg-system').value,
+      description: desc,
+      session_type: document.getElementById('pg-type').value,
+      play_format: document.getElementById('pg-format').value,
+      max_players: parseInt(document.getElementById('pg-max').value) || 5,
+      experience_level: document.getElementById('pg-exp').value,
+      current_players: 0,
+      status: 'open',
+    });
+    closeModal('modal-post-game');
+    showToast('🏰 Game posted!');
+    loadGames();
+  } catch(e) {
+    showToast('Failed to post. Try again.');
+  }
+}
+
+let joinGameId = null;
+function openJoinModal(sessionId, sessionTitle) {
+  joinGameId = sessionId;
+  document.getElementById('join-game-title').textContent = sessionTitle;
+  openModal('modal-join');
+}
+
+async function submitJoinRequest() {
+  if (!joinGameId || !state.player) return;
+  const msg = document.getElementById('join-message').value.trim();
+  if (!msg) { showToast('⚠️ Add a message'); return; }
+
+  try {
+    // Send as a system message to DM (we'll use QuestMessage with match context)
+    showToast('✅ Request sent!');
+    closeModal('modal-join');
+    document.getElementById('join-message').value = '';
+  } catch(e) {
+    showToast('Failed. Try again.');
+  }
+}
+
+// ── Profile ────────────────────────────
+function loadProfile() {
+  if (!state.player) return;
+  const p = state.player;
+  const isDM = p.tier === 'dm';
+  const avatarUrl = p.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(p.display_name)}&backgroundColor=2a1f0a`;
+  const games = (p.game_systems || []).map(g => `<span class="card-tag">${g}</span>`).join('');
+
+  let dmSection = '';
+  if (isDM) {
+    dmSection = `
+      <div class="section-card">
+        <div class="section-label">👑 DM Profile</div>
+        <div style="font-size:14px;color:var(--text);line-height:1.6;margin-bottom:10px;">${p.gm_bio || 'No GM bio set.'}</div>
+        <div style="font-size:13px;color:var(--text-dim);">🕐 ${p.schedule || 'No schedule set'}</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-top:4px;">💰 ${p.gm_rate ? '$'+p.gm_rate+'/session' : 'Free games'}</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-top:4px;">🖥️ ${(p.platforms || []).join(', ') || 'No platforms listed'}</div>
+      </div>
+    `;
+  } else {
+    dmSection = `
+      <div class="section-card dm-teaser-box" style="border-color:var(--gold-dim);">
+        <div class="section-label" style="color:var(--gold);">👑 Unlock DM Tier</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Add your bio, schedule, GM rate, platforms, and more. Stand out in the swipe deck.</div>
+        <button class="btn btn-gold btn-sm btn-full" onclick="navTo('upgrade')">Upgrade to DM Tier →</button>
+      </div>
+    `;
+  }
+
+  document.getElementById('profile-content').innerHTML = `
+    <div class="profile-card">
+      <div class="profile-banner"></div>
+      <div class="profile-content">
+        <div class="profile-avatar-wrap">
+          <img class="profile-avatar" src="${avatarUrl}" alt="${p.display_name}"/>
+        </div>
+        <div class="profile-name">${p.display_name}</div>
+        <div class="profile-role">${p.role || 'Adventurer'}</div>
+        <div class="profile-tier-badge ${isDM ? 'tier-dm' : 'tier-free'}">${isDM ? '👑 DM Tier' : '🆓 Free Adventurer'}</div>
+        <div class="profile-tags">${games}${p.playstyle ? `<span class="card-tag">${p.playstyle}</span>` : ''}${p.play_format ? `<span class="card-tag">${p.play_format}</span>` : ''}</div>
+        ${p.location_city ? `<div class="card-location" style="margin-top:10px;">📍 ${p.location_city}</div>` : ''}
+      </div>
+    </div>
+
+    ${p.bio ? `
+    <div class="section-card">
+      <div class="section-label">About</div>
+      <div style="font-size:14px;color:var(--text);line-height:1.6;">${p.bio}</div>
+    </div>` : ''}
+
+    ${dmSection}
+
+    <div class="section-card">
+      <button class="btn btn-danger btn-full btn-sm" onclick="signOut()">Sign Out</button>
+    </div>
+  `;
+}
+
+function signOut() {
+  localStorage.removeItem('pq_player_id');
+  state.player = null;
+  showScreen('landing');
+}
+
+// ── Upgrade ────────────────────────────
+async function startUpgrade() {
+  if (!state.player) {
+    showToast('Sign in first to upgrade!');
+    return;
+  }
+
+  const btn = document.getElementById('upgrade-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading...'; }
+
+  try {
+    const res = await fetch('https://earl-38bdc41d.base44.app/functions/partyQuestCheckout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: state.player.email,
+        name: state.player.display_name,
+        player_id: state.player.id,
+      }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      showToast('❌ ' + (data.error || 'Checkout failed. Try again.'));
+      if (btn) { btn.disabled = false; btn.textContent = '👑 Upgrade Now — $1.99/mo'; }
+    }
+  } catch (err) {
+    showToast('❌ Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '👑 Upgrade Now — $1.99/mo'; }
+  }
+}
+
+// ── Handle post-checkout return ────────
+function checkEnrollReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('enrolled') === 'true') {
+    showToast('🎉 Welcome to DM Tier! Refreshing your profile...', 4000);
+    // Re-fetch player to get updated tier
+    if (state.player?.id) {
+      setTimeout(async () => {
+        try {
+          const res = await fetch(`${API}?entity=QuestPlayer&id=${state.player.id}`);
+          const updated = await res.json();
+          if (updated?.id) {
+            state.player = updated;
+            launchApp();
+          }
+        } catch (_) {}
+      }, 2000);
+    }
+    // Clean URL
+    history.replaceState(null, '', window.location.pathname);
+  }
+  if (params.get('cancelled') === 'true') {
+    showToast('Checkout cancelled.', 2500);
+    history.replaceState(null, '', window.location.pathname);
+  }
+}
+
+// ── PWA Service Worker ─────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+// ── Boot ───────────────────────────────
+window.addEventListener('DOMContentLoaded', () => { boot(); checkEnrollReturn(); });
+</script>
+
+</body>
+</html>
