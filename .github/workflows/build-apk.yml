@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html']
+    paths: ['index.html', '.github/workflows/build-apk.yml']
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -19,173 +20,130 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android build tools
         run: |
-          sdkmanager "build-tools;34.0.0" "platforms;android-34" "platform-tools"
-          sdkmanager --licenses < /dev/null || true
+          $ANDROID_HOME/tools/bin/sdkmanager \
+            "build-tools;34.0.0" \
+            "platforms;android-34" \
+            "extras;google;google_play_services" \
+            "extras;android;m2repository"
 
-      - name: Generate keystore
+      - name: Generate signing keystore
         run: |
           keytool -genkeypair \
             -alias partyquest \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore ${{ github.workspace }}/partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.jks \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -dname "CN=Party Quest,OU=Dev,O=PartyQuest,L=Camas,ST=WA,C=US" \
             -noprompt
 
-      - name: Print SHA-256 fingerprint
+      - name: Print signing certificate fingerprint
         run: |
-          echo "====== SHA-256 FINGERPRINT ======"
+          echo "========== SHA-256 Fingerprint =========="
           keytool -list -v \
-            -keystore ${{ github.workspace }}/partyquest.keystore \
+            -keystore $GITHUB_WORKSPACE/partyquest.jks \
             -alias partyquest \
             -storepass partyquest123 | grep "SHA256:"
-          echo "================================="
+          echo "========================================"
 
-      - name: Create minimal Gradle Android project
+      - name: Clone Chromium Web Activity template
         run: |
-          mkdir -p android-app/app/src/main/{res/values,assets}
-          
-          cat > android-app/settings.gradle << 'GRADLE'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          rootProject.name = "PartyQuest"
-          include ':app'
-          GRADLE
-          
-          cat > android-app/build.gradle << 'GRADLE'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-              }
-          }
-          GRADLE
-          
-          cat > android-app/app/build.gradle << 'GRADLE'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              namespace 'app.partyquest.ttrpg'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId 'app.partyquest.ttrpg'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      signingConfig signingConfigs.release
-                  }
-              }
-              
-              signingConfigs {
-                  release {
-                      storeFile file('${{ github.workspace }}/partyquest.keystore')
-                      storePassword 'partyquest123'
-                      keyAlias 'partyquest'
-                      keyPassword 'partyquest123'
-                  }
-              }
-          }
-          GRADLE
-          
-          cat > android-app/app/src/main/AndroidManifest.xml << 'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="app.partyquest.ttrpg">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:label="Party Quest"
-                  android:icon="@mipmap/ic_launcher"
-                  android:usesCleartextTraffic="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          XML
-          
-          mkdir -p android-app/app/src/main/java/app/partyquest/ttrpg
-          cat > android-app/app/src/main/java/app/partyquest/ttrpg/MainActivity.kt << 'KOTLIN'
-          package app.partyquest.ttrpg
-          
-          import android.app.Activity
-          import android.os.Bundle
-          import android.webkit.WebView
-          import android.webkit.WebViewClient
-          
-          class MainActivity : Activity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  
-                  val webView = WebView(this)
-                  webView.settings.apply {
-                      javaScriptEnabled = true
-                      domStorageEnabled = true
-                      databaseEnabled = true
-                  }
-                  webView.webViewClient = WebViewClient()
-                  webView.loadUrl("https://ariqureshi73.github.io/party-quest/")
-                  
-                  setContentView(webView)
-              }
-          }
-          KOTLIN
-          
-          cat > android-app/app/src/main/res/values/strings.xml << 'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">Party Quest</string>
-          </resources>
-          XML
+          git clone --depth 1 https://github.com/GoogleChromeLabs/chromium-web-activity.git cwa-template
 
-      - name: Build APK (Gradle)
-        working-directory: ./android-app
+      - name: Configure CWA for Party Quest
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          ./gradlew assembleRelease --no-daemon 2>&1 || gradle assembleRelease
+          python3 << 'PYEOF'
+          import json, os, shutil
+          
+          # Copy template to build dir
+          src_manifest = './cwa-template/app/src/main/AndroidManifest.xml'
+          src_build = './cwa-template/app/build.gradle.kts'
+          
+          # Use template's gradle setup
+          shutil.copytree('./cwa-template/app', './app', dirs_exist_ok=True)
+          shutil.copytree('./cwa-template/gradle', './gradle', dirs_exist_ok=True)
+          shutil.copy('./cwa-template/build.gradle.kts', './build.gradle.kts')
+          shutil.copy('./cwa-template/settings.gradle.kts', './settings.gradle.kts')
+          shutil.copy('./cwa-template/gradlew', './gradlew')
+          shutil.copy('./cwa-template/gradlew.bat', './gradlew.bat')
+          os.chmod('./gradlew', 0o755)
+          
+          # Update manifest to point to our website
+          manifest_path = './app/src/main/AndroidManifest.xml'
+          with open(manifest_path) as f:
+              content = f.read()
+          
+          # Replace package name and start URL
+          content = content.replace(
+              'com.example.cwa',
+              'app.partyquest.ttrpg'
+          )
+          content = content.replace(
+              'https://example.com',
+              'https://ariqureshi73.github.io/party-quest'
+          )
+          
+          with open(manifest_path, 'w') as f:
+              f.write(content)
+          
+          print("✅ CWA configured for Party Quest")
+          PYEOF
 
-      - name: List build outputs
+      - name: Build APK with Gradle
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/partyquest.jks \
+            -Pandroid.injected.signing.store.password=partyquest123 \
+            -Pandroid.injected.signing.key.alias=partyquest \
+            -Pandroid.injected.signing.key.password=partyquest123
+
+      - name: Build AAB (Play Store bundle)
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/partyquest.jks \
+            -Pandroid.injected.signing.store.password=partyquest123 \
+            -Pandroid.injected.signing.key.alias=partyquest \
+            -Pandroid.injected.signing.key.password=partyquest123
+
+      - name: Find and rename outputs
         run: |
           find . -name "*.apk" -type f
           find . -name "*.aab" -type f
+          
+          # Move to workspace root with standard names
+          mkdir -p outputs
+          find . -name "*release.apk" -exec cp {} outputs/party-quest.apk \;
+          find . -name "*release.aab" -exec cp {} outputs/party-quest.aab \;
+          ls -lh outputs/
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: android-app/app/build/outputs/apk/release/app-release.apk
+          path: outputs/party-quest.apk
           if-no-files-found: warn
 
-      - name: Upload keystore
+      - name: Upload AAB artifact (Play Store)
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-aab
+          path: outputs/party-quest.aab
+          if-no-files-found: warn
+
+      - name: Upload signing keystore
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
-          path: partyquest.keystore
-          retention-days: 30
+          path: partyquest.jks
+          retention-days: 90
