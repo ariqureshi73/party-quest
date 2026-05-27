@@ -4,15 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html']
+    paths: ['index.html', 'manifest.json']
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-    env:
-      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
-      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repo
@@ -24,95 +20,85 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          ndk-version: '26.0.10792818'
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-levels: 34
+          build-tools: 34.0.0
+
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair \
+            -alias partyquest \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore $HOME/partyquest.keystore \
+            -storepass partyquest123 \
+            -keypass partyquest123 \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -noprompt
+
+      - name: Print keystore fingerprint
+        run: |
+          keytool -list -v \
+            -keystore $HOME/partyquest.keystore \
+            -alias partyquest \
+            -storepass partyquest123 | grep -A2 "SHA256:"
 
       - name: Install Cordova
         run: npm install -g cordova
 
       - name: Create Cordova project
         run: |
-          cordova create pq "app.partyquest.ttrpg" "Party Quest"
-          cd pq
+          cordova create twa app.partyquest.ttrpg "Party Quest"
+          cd twa
           cordova platform add android
 
-      - name: Add Party Quest web content
+      - name: Copy web files
         run: |
-          cp index.html pq/www/
-          cp manifest.json pq/www/
+          cp index.html twa/www/
+          cp manifest.json twa/www/
+          if [ -f *.js ]; then cp *.js twa/www/; fi
+          if [ -f *.css ]; then cp *.css twa/www/; fi
 
-      - name: Generate keystore (non-interactive)
+      - name: Configure Cordova for signing
         run: |
-          keytool -genkeypair \
-            -alias partyquest \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
-            -storepass partyquest123 \
-            -keypass partyquest123 \
-            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
-            -noprompt
-
-      - name: Print SHA-256 fingerprint
-        run: |
-          echo "====== SHA-256 FINGERPRINT ======"
-          keytool -list -v \
-            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
-            -alias partyquest \
-            -storepass partyquest123 | grep "SHA256:"
-          echo "================================="
-
-      - name: Configure Cordova build settings
-        run: |
-          cd pq
-          cat > build.json << 'JSONEOF'
+          cat > twa/build.json << 'JSONEOF'
           {
             "android": {
               "release": {
-                "keystore": "$GITHUB_WORKSPACE/partyquest.keystore",
+                "keystore": "$HOME/partyquest.keystore",
                 "storePassword": "partyquest123",
                 "alias": "partyquest",
-                "password": "partyquest123",
-                "keystoreType": "jks"
+                "password": "partyquest123"
               }
             }
           }
           JSONEOF
 
-      - name: Build signed APK (Cordova)
+      - name: Build APK (Cordova)
         run: |
-          cd pq
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-          cordova build android --release -- --keystore=$GITHUB_WORKSPACE/partyquest.keystore --storePassword=partyquest123 --alias=partyquest --password=partyquest123
-        env:
-          GRADLE_USER_HOME: /github/workspace/.gradle
+          cd twa
+          cordova build android --release -- --keystore=$HOME/partyquest.keystore --storePassword=partyquest123 --alias=partyquest --password=partyquest123
 
-      - name: Find and rename APK
-        run: |
-          find pq -name "*.apk" -type f
-          ls -lah pq/platforms/android/app/build/outputs/apk/release/
-          # Copy to workspace root for easy access
-          cp pq/platforms/android/app/build/outputs/apk/release/app-release.apk $GITHUB_WORKSPACE/party-quest.apk || echo "APK not found"
+      - name: Find APK
+        run: find twa -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: party-quest.apk
+          path: twa/platforms/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload keystore (SAVE THIS!)
+      - name: Upload keystore
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
-          path: partyquest.keystore
+          path: ${{ env.HOME }}/partyquest.keystore
           retention-days: 30
