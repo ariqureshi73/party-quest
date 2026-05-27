@@ -1,52 +1,162 @@
-name: Build Party Quest APK with Expo
+name: Build Party Quest APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['index.html', 'manifest.json']
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
-          node-version: '18'
-
-      - name: Install Expo CLI
-        run: npm install -g eas-cli
-
-      - name: Create Expo project from web files
+          java-version: '11'
+          distribution: 'temurin'
+      
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Accept Android licenses
         run: |
-          mkdir -p party-quest-expo
-          cd party-quest-expo
-          npx create-expo-app@latest . --template
-          cp ../index.html ./App.web.js || true
-          
-      - name: Build APK with EAS (local build)
+          echo y | sdkmanager --licenses || true
+          sdkmanager "build-tools;34.0.0" "platforms;android-34" "ndk;25.1.8937393"
+      
+      - name: Create minimal Gradle Android project
         run: |
-          cd party-quest-expo
-          # Use local Gradle build instead of EAS cloud
-          npx eas build --platform android --local --wait || true
+          mkdir -p app-project
+          cd app-project
           
-      - name: Fallback: Simple APK wrapper
+          cat > settings.gradle << 'GRADLE'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "PartyQuest"
+          include ':app'
+          GRADLE
+          
+          mkdir -p app/src/main/{assets,java/app/partyquest,res/{layout,values,drawable,mipmap-hdpi}}
+          
+          cat > build.gradle << 'GRADLE'
+          plugins {
+              id 'com.android.application' version '8.0.0' apply false
+          }
+          GRADLE
+          
+          cat > app/build.gradle << 'GRADLE'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'app.partyquest.ttrpg'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId 'app.partyquest.ttrpg'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          GRADLE
+          
+          cat > AndroidManifest.xml << 'MANIFEST'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="app.partyquest.ttrpg">
+          
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          
+              <application
+                  android:label="Party Quest"
+                  android:icon="@mipmap/ic_launcher"
+                  android:allowBackup="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:label="Party Quest">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST
+          
+          mkdir -p app/src/main
+          mv AndroidManifest.xml app/src/main/
+          
+          # Copy web files to assets
+          cp ../index.html app/src/main/assets/
+          cp ../manifest.json app/src/main/assets/ || true
+          
+          # Create minimal Activity
+          mkdir -p app/src/main/java/app/partyquest
+          cat > app/src/main/java/app/partyquest/MainActivity.java << 'JAVA'
+          package app.partyquest;
+          
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webview = new WebView(this);
+                  webview.getSettings().setJavaScriptEnabled(true);
+                  webview.loadUrl("file:///android_asset/index.html");
+                  setContentView(webview);
+              }
+          }
+          JAVA
+      
+      - name: Build APK
         run: |
-          # If EAS fails, create a simple Android wrapper APK
-          mkdir -p android-wrapper
-          cd android-wrapper
-          
-          # Download Gradle directly from a mirror
-          curl -L "https://gradle.org/release/latest-release-candidate.zip" \
-            -o gradle.zip || \
-            echo "Gradle download failed, will use system gradle"
-
-      - name: Upload build logs
-        if: always()
+          cd app-project
+          chmod +x ../gradlew || true
+          ./gradlew assembleRelease 2>&1 || gradle assembleRelease
+      
+      - name: List APK outputs
+        run: find app-project -name "*.apk" -exec ls -lh {} \;
+      
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
-          path: |
-            party-quest-expo/.expo/
-            party-quest-expo/build/
-          retention-days: 7
+          name: party-quest-apk
+          path: app-project/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: warn
