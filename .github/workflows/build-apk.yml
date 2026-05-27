@@ -1,0 +1,82 @@
+name: Build Party Quest APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['index.html']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "build-tools;34.0.0" "platforms;android-34"
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair \
+            -alias partyquest \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore partyquest.keystore \
+            -storepass partyquest123 \
+            -keypass partyquest123 \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US"
+
+      - name: Print SHA-256 fingerprint
+        run: |
+          echo "====== SHA-256 FINGERPRINT ======"
+          keytool -list -v \
+            -keystore partyquest.keystore \
+            -alias partyquest \
+            -storepass partyquest123 | grep "SHA256:"
+          echo "================================="
+
+      - name: Build APK + AAB
+        run: |
+          bubblewrap init --manifest https://ariqureshi73.github.io/party-quest/manifest.json --directory ./twa
+          cd twa && bubblewrap build
+        env:
+          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-apk
+          path: twa/app-release-signed.apk
+          retention-days: 30
+
+      - name: Upload AAB (Play Store)
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-aab
+          path: twa/app-release-bundle.aab
+          retention-days: 30
+
+      - name: Upload keystore backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-keystore
+          path: partyquest.keystore
+          retention-days: 30
