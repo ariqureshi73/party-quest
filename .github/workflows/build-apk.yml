@@ -19,10 +19,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: |
+          sdkmanager "build-tools;34.0.0"
+          sdkmanager "platforms;android-34"
+          sdkmanager "cmdline-tools;latest"
 
       - name: Generate keystore
         run: |
@@ -44,96 +49,83 @@ jobs:
             -storepass partyquest123 | grep "SHA256:"
           echo "================================="
 
-      - name: Create minimal Android project
+      - name: Clone Bubblewrap repo
         run: |
-          mkdir -p twa
-          cd twa
-          
-          # Create minimal AndroidManifest.xml for web wrapper
-          mkdir -p src/main
-          cat > src/main/AndroidManifest.xml << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="app.partyquest.ttrpg">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application
-                  android:label="Party Quest"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          XMLEOF
-          
-          # Create build.gradle
-          cat > build.gradle << 'GRADLEEOF'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              namespace 'app.partyquest.ttrpg'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId "app.partyquest.ttrpg"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              
-              signingConfigs {
-                  release {
-                      storeFile file(System.getenv('GITHUB_WORKSPACE') + '/partyquest.keystore')
-                      storePassword 'partyquest123'
-                      keyAlias 'partyquest'
-                      keyPassword 'partyquest123'
-                  }
-              }
-              
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.release
-                      minifyEnabled false
-                  }
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          GRADLEEOF
+          git clone https://github.com/GoogleChromeLabs/bubblewrap.git
+          cd bubblewrap
+          npm install
 
-      - name: Build APK with Gradle
-        working-directory: twa
+      - name: Create Bubblewrap project (non-interactive)
+        working-directory: ./bubblewrap
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
-        env:
-          GRADLE_OPTS: "-Xmx2048m"
+          node packages/cli/dist/src/main.js init \
+            --manifest https://ariqureshi73.github.io/party-quest/manifest.json \
+            --directory ../twa \
+            --jdkPath /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64 || true
 
-      - name: List build outputs
+      - name: Check TWA structure
         run: |
-          find . -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20
+          ls -la twa/ || echo "TWA dir not created"
+          [ -f twa/twa-manifest.json ] && echo "✅ twa-manifest.json exists" || echo "❌ twa-manifest.json missing"
+
+      - name: Patch manifest with signing config
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          
+          manifest_path = 'twa/twa-manifest.json'
+          if not os.path.exists(manifest_path):
+              print("ERROR: twa-manifest.json not found!")
+              print("Contents of twa/:", os.listdir('twa') if os.path.exists('twa') else 'twa/ missing')
+              exit(1)
+          
+          with open(manifest_path) as f:
+              m = json.load(f)
+          
+          # Add signing config
+          m['signingMode'] = 'local'
+          m['packageId'] = 'app.partyquest.ttrpg'
+          
+          with open(manifest_path, 'w') as f:
+              json.dump(m, f, indent=2)
+          
+          print("✅ Manifest patched")
+          PYEOF
+
+      - name: Build with Gradle (via Bubblewrap)
+        working-directory: ./bubblewrap
+        run: |
+          node packages/cli/dist/src/main.js build \
+            --directory ../twa \
+            --jdkPath /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64 || true
+
+      - name: Find APK/AAB output
+        run: |
+          echo "Searching for build outputs..."
+          find twa -type f \( -name "*.apk" -o -name "*.aab" \) -ls 2>/dev/null || echo "No APK/AAB found"
+          echo ""
+          echo "Full twa directory:"
+          find twa -type f 2>/dev/null | head -20
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: "twa/**/release/*.apk"
+          path: twa/**/*.apk
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload keystore (save this!)
+      - name: Upload AAB
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-aab
+          path: twa/**/*.aab
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload keystore
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
