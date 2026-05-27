@@ -54,67 +54,52 @@ jobs:
             -storepass partyquest123 | grep "SHA256:"
           echo "================================="
 
-      - name: Create Bubblewrap config
+      - name: Init Bubblewrap (non-interactive)
+        run: |
+          # Create a non-interactive input stream with all default responses
+          (echo "n"; echo "$JAVA_HOME_17_X64"; echo "") | \
+            bubblewrap init \
+              --manifest https://ariqureshi73.github.io/party-quest/manifest.json \
+              --directory ./twa \
+              --skipDownloadConfirmation
+        env:
+          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
+
+      - name: Patch TWA manifest with keystore config
         run: |
           python3 << 'PYEOF'
           import json, os
           
-          config = {
-              "jdkPath": "/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64",
-              "androidSdkPath": "/usr/local/lib/android/sdk",
-              "manifest": {
-                  "startUrl": "https://ariqureshi73.github.io/party-quest",
-                  "name": "Party Quest",
-                  "shortName": "Party Quest",
-                  "display": "standalone",
-                  "backgroundColor": "#000000",
-                  "themeColor": "#2563eb"
-              },
-              "signing": {
-                  "keystore": os.environ['GITHUB_WORKSPACE'] + '/partyquest.keystore',
-                  "keyAlias": "partyquest",
-                  "keyPassword": "partyquest123",
-                  "storePassword": "partyquest123"
-              },
-              "packageId": "app.partyquest.ttrpg",
-              "appVersion": "1.0.0",
-              "appVersionCode": 1
-          }
+          manifest_path = './twa/twa-manifest.json'
+          with open(manifest_path) as f:
+              m = json.load(f)
           
-          with open('./bubblewrap-config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          print("Config created")
+          m['signingMode'] = 'local'
+          m['signing'] = {
+              'keystore': os.environ['GITHUB_WORKSPACE'] + '/partyquest.keystore',
+              'keyAlias': 'partyquest',
+              'keyPassword': 'partyquest123',
+              'storePassword': 'partyquest123'
+          }
+          m['packageId'] = 'app.partyquest.ttrpg'
+          m['name'] = 'Party Quest'
+          m['launcherName'] = 'Party Quest'
+          
+          with open(manifest_path, 'w') as f:
+              json.dump(m, f, indent=2)
+          
+          print("Manifest patched:", json.dumps(m, indent=2))
           PYEOF
-
-      - name: Init Bubblewrap with config
-        run: |
-          cd $GITHUB_WORKSPACE
-          bubblewrap init \
-            --jdk_path "/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64" \
-            --android_sdk_path "/usr/local/lib/android/sdk" \
-            --manifest https://ariqureshi73.github.io/party-quest/manifest.json \
-            --directory ./twa
-        env:
-          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
 
       - name: Build APK + AAB
         working-directory: ./twa
         run: |
-          bubblewrap build \
-            --keystore $GITHUB_WORKSPACE/partyquest.keystore \
-            --keystore_password partyquest123 \
-            --key_password partyquest123 \
-            --key_alias partyquest
+          echo "" | bubblewrap build
         env:
           BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
 
       - name: List build outputs
-        run: |
-          echo "=== Build outputs ==="
-          find ./twa -type f \( -name "*.apk" -o -name "*.aab" \) 2>/dev/null | head -20
-          echo ""
-          echo "=== Full twa directory ==="
-          ls -lah ./twa/ 2>/dev/null || echo "twa dir not found"
+        run: find ./twa -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK/AAB found"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
