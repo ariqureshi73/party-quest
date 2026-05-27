@@ -2,133 +2,106 @@ name: Build Party Quest APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['index.html']
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Capacitor CLI
-        run: npm install -g @capacitor/cli
-
-      - name: Create Capacitor project structure
+      - name: Download Android Command-line Tools
         run: |
-          mkdir -p party-quest-app/src
-          cp index.html manifest.json party-quest-app/src/
-          
-          # Create capacitor.config.json
-          cat > party-quest-app/capacitor.config.json << 'JSON'
-          {
-            "appId": "app.partyquest.ttrpg",
-            "appName": "Party Quest",
-            "webDir": "src",
-            "server": {
-              "url": "https://ariqureshi73.github.io/party-quest",
-              "cleartext": false
-            },
-            "plugins": {}
+          mkdir -p /opt/android-sdk/cmdline-tools
+          cd /opt/android-sdk/cmdline-tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip
+          unzip -q commandlinetools-linux-10406996_latest.zip
+          mv cmdline-tools latest
+
+      - name: Setup SDK
+        env:
+          ANDROID_SDK_ROOT: /opt/android-sdk
+        run: |
+          /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" \
+            --install_option=--no_https | head -100
+
+      - name: Create minimal Android project
+        env:
+          ANDROID_SDK_ROOT: /opt/android-sdk
+          ANDROID_HOME: /opt/android-sdk
+        run: |
+          mkdir -p app
+          cat > build.gradle << 'GRADLE'
+          plugins {
+            id 'com.android.application'
           }
-          JSON
+          android {
+            namespace 'app.partyquest'
+            compileSdk 34
+            defaultConfig {
+              applicationId 'app.partyquest.ttrpg'
+              minSdk 28
+              targetSdk 34
+              versionCode 1
+              versionName '1.0'
+            }
+            signingConfigs {
+              release {
+                storeFile = file('partyquest.keystore')
+                storePassword 'partyquest123'
+                keyAlias 'partyquest'
+                keyPassword 'partyquest123'
+              }
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.release
+                minifyEnabled false
+              }
+            }
+            buildFeatures {
+              viewBinding true
+            }
+          }
+          dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          GRADLE
 
-      - name: Initialize Capacitor Android
-        working-directory: party-quest-app
-        run: |
-          npx @capacitor/cli add android --web-dir=src
-
-      - name: Generate Keystore
+      - name: Generate keystore
         run: |
           keytool -genkeypair \
             -alias partyquest \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -dname "CN=Party Quest,OU=App,O=PartyQuest,L=Camas,ST=WA,C=US" \
             -noprompt
 
-      - name: Get SHA-256 Fingerprint
+      - name: List keystore
         run: |
-          keytool -list -v \
-            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
-            -alias partyquest \
-            -storepass partyquest123 | grep "SHA256:" | tee sha256.txt
+          echo "=== SHA-256 FINGERPRINT ==="
+          keytool -list -v -keystore partyquest.keystore -alias partyquest -storepass partyquest123 | grep SHA256
 
-      - name: Configure Gradle for Release Build
-        working-directory: party-quest-app/android
-        run: |
-          mkdir -p gradle_props
-          cat > local.properties << 'PROPS'
-          sdk.dir=$ANDROID_HOME
-          org.gradle.jvmargs=-Xmx2048m
-          PROPS
-          
-          cat > gradle.properties << 'PROPS'
-          org.gradle.jvmargs=-Xmx2048m
-          PROPS
-
-      - name: Build APK (Gradle)
-        working-directory: party-quest-app/android
-        run: |
-          ./gradlew \
-            -Dorg.gradle.jvmargs=-Xmx2048m \
-            -Pandroid.useAndroidX=true \
-            -Pandroid.enableJetifier=true \
-            -PversionCode=1 \
-            -PversionName=1.0.0 \
-            -Psigning.keystore=$GITHUB_WORKSPACE/partyquest.keystore \
-            -Psigning.keyAlias=partyquest \
-            -Psigning.keyPassword=partyquest123 \
-            -Psigning.storePassword=partyquest123 \
-            assemble Release 2>&1 | tee build.log
-
-      - name: Find APK Output
-        run: |
-          find party-quest-app -name "*.apk" -o -name "*.aab"
-          ls -lah party-quest-app/android/app/build/outputs/apk/release/ 2>/dev/null || echo "APK dir not found"
-          ls -lah party-quest-app/android/app/build/outputs/bundle/ 2>/dev/null || echo "Bundle dir not found"
-
-      - name: Upload APK
+      - name: Upload keystore artifact
         uses: actions/upload-artifact@v4
         with:
-          name: party-quest-apk
-          path: party-quest-app/android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: warn
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: party-quest-aab
-          path: party-quest-app/android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: warn
-
-      - name: Upload Keystore
-        uses: actions/upload-artifact@v4
-        with:
-          name: party-quest-keystore
+          name: partyquest-keystore
           path: partyquest.keystore
 
-      - name: Upload SHA-256
-        uses: actions/upload-artifact@v4
-        with:
-          name: sha256-fingerprint
-          path: sha256.txt
+      - name: Done
+        run: echo "✅ Keystore generated successfully"
