@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html', 'manifest.json']
 
 jobs:
   build:
@@ -14,85 +13,218 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Java 11
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-levels: 34
-          build-tools: 34.0.0
+
+      - name: Create Android project structure
+        run: |
+          mkdir -p PartyQuest/app/src/main/assets
+          mkdir -p PartyQuest/app/src/main/res/values
+          mkdir -p PartyQuest/app/src/main/java/app/partyquest
+          mkdir -p PartyQuest/gradle
+
+      - name: Create build.gradle.kts (root)
+        run: |
+          cat > PartyQuest/build.gradle.kts << 'GRADLE'
+          plugins {
+            id("com.android.application") version "8.1.0" apply false
+          }
+          GRADLE
+
+      - name: Create app/build.gradle.kts
+        run: |
+          cat > PartyQuest/app/build.gradle.kts << 'GRADLE'
+          plugins {
+            id("com.android.application")
+          }
+
+          android {
+            namespace = "app.partyquest"
+            compileSdk = 34
+
+            defaultConfig {
+              applicationId = "app.partyquest"
+              minSdk = 21
+              targetSdk = 34
+              versionCode = 1
+              versionName = "1.0"
+            }
+
+            buildTypes {
+              release {
+                isMinifyEnabled = false
+              }
+            }
+
+            compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_17
+              targetCompatibility = JavaVersion.VERSION_17
+            }
+          }
+
+          dependencies {
+            implementation("androidx.appcompat:appcompat:1.6.1")
+            implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+            implementation("com.google.android.material:material:1.9.0")
+          }
+          GRADLE
+
+      - name: Create settings.gradle.kts
+        run: |
+          cat > PartyQuest/settings.gradle.kts << 'GRADLE'
+          pluginManagement {
+            repositories {
+              gradlePluginPortal()
+              google()
+              mavenCentral()
+            }
+          }
+          dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+              google()
+              mavenCentral()
+            }
+          }
+          rootProject.name = "PartyQuest"
+          include(":app")
+          GRADLE
+
+      - name: Create gradle.properties
+        run: |
+          cat > PartyQuest/gradle.properties << 'PROPS'
+          org.gradle.jvmargs=-Xmx2048m
+          PROPS
+
+      - name: Create AndroidManifest.xml
+        run: |
+          cat > PartyQuest/app/src/main/AndroidManifest.xml << 'MANIFEST'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            android:versionCode="1"
+            android:versionName="1.0">
+
+            <uses-permission android:name="android.permission.INTERNET" />
+
+            <application
+              android:allowBackup="true"
+              android:debuggable="false"
+              android:icon="@mipmap/ic_launcher"
+              android:label="@string/app_name"
+              android:supportsRtl="true"
+              android:theme="@style/Theme.AppCompat.Light">
+
+              <activity
+                android:name=".MainActivity"
+                android:exported="true">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+                </intent-filter>
+              </activity>
+
+            </application>
+          </manifest>
+          MANIFEST
+
+      - name: Create strings.xml
+        run: |
+          cat > PartyQuest/app/src/main/res/values/strings.xml << 'STRINGS'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <string name="app_name">Party Quest</string>
+          </resources>
+          STRINGS
+
+      - name: Create MainActivity.java
+        run: |
+          cat > PartyQuest/app/src/main/java/app/partyquest/MainActivity.java << 'JAVA'
+          package app.partyquest;
+
+          import androidx.appcompat.app.AppCompatActivity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends AppCompatActivity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              setContentView(R.layout.activity_main);
+
+              WebView webView = findViewById(R.id.webview);
+              webView.setWebViewClient(new WebViewClient());
+              webView.getSettings().setJavaScriptEnabled(true);
+              webView.loadUrl("https://ariqureshi73.github.io/party-quest/index.html");
+            }
+          }
+          JAVA
+
+      - name: Create activity_main.xml
+        run: |
+          mkdir -p PartyQuest/app/src/main/res/layout
+          cat > PartyQuest/app/src/main/res/layout/activity_main.xml << 'LAYOUT'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <WebView
+              android:id="@+id/webview"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent" />
+
+          </LinearLayout>
+          LAYOUT
 
       - name: Generate keystore
         run: |
           keytool -genkeypair \
             -alias partyquest \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore $HOME/partyquest.keystore \
+            -keystore PartyQuest/partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
             -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
             -noprompt
 
-      - name: Print keystore fingerprint
+      - name: Print SHA-256 fingerprint
         run: |
+          echo "====== SHA-256 FINGERPRINT ======"
           keytool -list -v \
-            -keystore $HOME/partyquest.keystore \
+            -keystore PartyQuest/partyquest.keystore \
             -alias partyquest \
-            -storepass partyquest123 | grep -A2 "SHA256:"
+            -storepass partyquest123 | grep "SHA256:"
+          echo "================================="
 
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Create Cordova project
+      - name: Build APK with Gradle
+        working-directory: PartyQuest
         run: |
-          cordova create twa app.partyquest.ttrpg "Party Quest"
-          cd twa
-          cordova platform add android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Copy web files
+      - name: Sign APK
+        working-directory: PartyQuest
         run: |
-          cp index.html twa/www/
-          cp manifest.json twa/www/
-          if [ -f *.js ]; then cp *.js twa/www/; fi
-          if [ -f *.css ]; then cp *.css twa/www/; fi
-
-      - name: Configure Cordova for signing
-        run: |
-          cat > twa/build.json << 'JSONEOF'
-          {
-            "android": {
-              "release": {
-                "keystore": "$HOME/partyquest.keystore",
-                "storePassword": "partyquest123",
-                "alias": "partyquest",
-                "password": "partyquest123"
-              }
-            }
-          }
-          JSONEOF
-
-      - name: Build APK (Cordova)
-        run: |
-          cd twa
-          cordova build android --release -- --keystore=$HOME/partyquest.keystore --storePassword=partyquest123 --alias=partyquest --password=partyquest123
-
-      - name: Find APK
-        run: find twa -name "*.apk" -type f
+          apksigner sign \
+            --ks partyquest.keystore \
+            --ks-key-alias partyquest \
+            --ks-pass pass:partyquest123 \
+            --key-pass pass:partyquest123 \
+            --out app/build/outputs/apk/release/party-quest-signed.apk \
+            app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: twa/platforms/android/app/build/outputs/apk/release/*.apk
+          path: PartyQuest/app/build/outputs/apk/release/party-quest-signed.apk
           if-no-files-found: warn
           retention-days: 30
 
@@ -100,5 +232,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
-          path: ${{ env.HOME }}/partyquest.keystore
+          path: PartyQuest/partyquest.keystore
           retention-days: 30
