@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html', 'manifest.json']
+    paths: ['index.html']
 
 jobs:
   build:
@@ -14,16 +14,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -31,63 +31,79 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair \
+            -alias partyquest \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore partyquest.keystore \
+            -storepass partyquest123 \
+            -keypass partyquest123 \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
+            -noprompt
+
+      - name: Print SHA-256 fingerprint
+        run: |
+          echo "====== SHA-256 FINGERPRINT ======"
+          keytool -list -v \
+            -keystore partyquest.keystore \
+            -alias partyquest \
+            -storepass partyquest123 | grep "SHA256:"
+          echo "================================="
+
       - name: Create Cordova project
-        run: |
-          cordova create partyquest app.partyquest.ttrpg "Party Quest"
-          cd partyquest
-          cordova platform add android --save
+        run: cordova create partyquest app.partyquest.ttrpg "Party Quest"
 
-      - name: Copy HTML to www
+      - name: Copy web files
         run: |
-          cp index.html partyquest/www/index.html
-          cp manifest.json partyquest/www/manifest.json
-          # Add viewport meta tag if missing
-          if ! grep -q 'viewport' partyquest/www/index.html; then
-            sed -i '/<head>/a\    <meta name="viewport" content="width=device-width, initial-scale=1.0">' partyquest/www/index.html
-          fi
+          cp index.html partyquest/www/
+          cp manifest.json partyquest/www/
+          mkdir -p partyquest/www/assets
+          cp -r assets/* partyquest/www/assets/ || true
 
-      - name: Configure Cordova for release build
+      - name: Add Android platform
+        working-directory: ./partyquest
+        run: cordova platform add android
+
+      - name: Configure signing
         run: |
-          cd partyquest
-          echo '<?xml version=\'1.0\' encoding=\'utf-8\'?>
-          <widget id="app.partyquest.ttrpg" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
-              <name>Party Quest</name>
-              <description>D&D + TTRPGs Matchmaking</description>
-              <author email="support@partyquest.app" href="https://partyquest.app">Party Quest Team</author>
-              <content src="index.html" />
-              <access origin="*" />
-              <allow-intent href="http://*/*" />
-              <allow-intent href="https://*/*" />
-              <preference name="orientation" value="portrait" />
-              <preference name="target-device" value="universal" />
-              <preference name="fullscreen" value="true" />
-              <preference name="webviewbounce" value="false" />
-              <preference name="android-minSdkVersion" value="24" />
-              <preference name="android-targetSdkVersion" value="34" />
-              <plugin name="cordova-plugin-whitelist" spec="1" />
-              <engine name="android" spec="^13.0.0" />
-          </widget>' > config.xml
+          cat > partyquest/build.json << 'JSON'
+          {
+            "android": {
+              "release": {
+                "keystore": "partyquest.keystore",
+                "storePassword": "partyquest123",
+                "alias": "partyquest",
+                "password": "partyquest123",
+                "keystorePath": "$GITHUB_WORKSPACE"
+              }
+            }
+          }
+          JSON
 
       - name: Build APK (release)
-        run: |
-          cd partyquest
-          cordova build android --release
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
+        working-directory: ./partyquest
+        run: cordova build android --release -- --storePassword=partyquest123 --password=partyquest123 --keystore=$GITHUB_WORKSPACE/partyquest.keystore --alias=partyquest
 
-      - name: Find and copy APK
+      - name: Build AAB (bundle for Play Store)
+        working-directory: ./partyquest
         run: |
-          find partyquest -name "*.apk" -o -name "*.aab" | head -20
-          mkdir -p artifacts
-          find partyquest -name "*-release.apk" -exec cp {} artifacts/party-quest-release.apk \;
-          find partyquest -name "*.aab" -exec cp {} artifacts/party-quest-release.aab \;
-          ls -lah artifacts/
+          cd platforms/android && ./gradlew bundleRelease \
+            -Dorg.gradle.project.storeFile=$GITHUB_WORKSPACE/partyquest.keystore \
+            -Dorg.gradle.project.storePassword=partyquest123 \
+            -Dorg.gradle.project.keyAlias=partyquest \
+            -Dorg.gradle.project.keyPassword=partyquest123
+
+      - name: List build outputs
+        run: |
+          echo "=== Searching for APK/AAB files ==="
+          find partyquest/platforms/android -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: artifacts/party-quest-release.apk
+          path: partyquest/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: warn
           retention-days: 30
 
@@ -95,6 +111,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-aab
-          path: artifacts/party-quest-release.aab
+          path: partyquest/platforms/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-keystore
+          path: partyquest.keystore
           retention-days: 30
