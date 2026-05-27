@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['index.html', '.github/workflows/build-apk.yml']
+    paths: ['index.html']
 
 jobs:
   build:
@@ -14,10 +14,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java 11 (Android SDK compatible)
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
 
       - name: Set up Node.js
@@ -30,120 +30,95 @@ jobs:
 
       - name: Install Android build tools
         run: |
-          $ANDROID_HOME/tools/bin/sdkmanager \
-            "build-tools;34.0.0" \
-            "platforms;android-34" \
-            "extras;google;google_play_services" \
-            "extras;android;m2repository"
+          sdkmanager "build-tools;34.0.0" "platforms;android-34"
 
-      - name: Generate signing keystore
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Generate keystore
         run: |
           keytool -genkeypair \
             -alias partyquest \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore $GITHUB_WORKSPACE/partyquest.jks \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest,OU=Dev,O=PartyQuest,L=Camas,ST=WA,C=US" \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
             -noprompt
 
-      - name: Print signing certificate fingerprint
+      - name: Print SHA-256 fingerprint
         run: |
-          echo "========== SHA-256 Fingerprint =========="
+          echo "====== SHA-256 FINGERPRINT ======"
           keytool -list -v \
-            -keystore $GITHUB_WORKSPACE/partyquest.jks \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -alias partyquest \
             -storepass partyquest123 | grep "SHA256:"
-          echo "========================================"
+          echo "================================="
 
-      - name: Clone Chromium Web Activity template
+      - name: Init Bubblewrap (non-interactive)
         run: |
-          git clone --depth 1 https://github.com/GoogleChromeLabs/chromium-web-activity.git cwa-template
+          printf 'n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | \
+            bubblewrap init \
+              --manifest https://ariqureshi73.github.io/party-quest/manifest.json \
+              --directory ./twa
+        env:
+          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
 
-      - name: Configure CWA for Party Quest
+      - name: Patch TWA manifest with keystore config
         run: |
           python3 << 'PYEOF'
-          import json, os, shutil
+          import json, os
           
-          # Copy template to build dir
-          src_manifest = './cwa-template/app/src/main/AndroidManifest.xml'
-          src_build = './cwa-template/app/build.gradle.kts'
-          
-          # Use template's gradle setup
-          shutil.copytree('./cwa-template/app', './app', dirs_exist_ok=True)
-          shutil.copytree('./cwa-template/gradle', './gradle', dirs_exist_ok=True)
-          shutil.copy('./cwa-template/build.gradle.kts', './build.gradle.kts')
-          shutil.copy('./cwa-template/settings.gradle.kts', './settings.gradle.kts')
-          shutil.copy('./cwa-template/gradlew', './gradlew')
-          shutil.copy('./cwa-template/gradlew.bat', './gradlew.bat')
-          os.chmod('./gradlew', 0o755)
-          
-          # Update manifest to point to our website
-          manifest_path = './app/src/main/AndroidManifest.xml'
+          manifest_path = './twa/twa-manifest.json'
           with open(manifest_path) as f:
-              content = f.read()
+              m = json.load(f)
           
-          # Replace package name and start URL
-          content = content.replace(
-              'com.example.cwa',
-              'app.partyquest.ttrpg'
-          )
-          content = content.replace(
-              'https://example.com',
-              'https://ariqureshi73.github.io/party-quest'
-          )
+          m['signingMode'] = 'local'
+          m['signing'] = {
+              'keystore': os.environ['GITHUB_WORKSPACE'] + '/partyquest.keystore',
+              'keyAlias': 'partyquest',
+              'keyPassword': 'partyquest123',
+              'storePassword': 'partyquest123'
+          }
+          m['packageId'] = 'app.partyquest.ttrpg'
+          m['name'] = 'Party Quest'
+          m['launcherName'] = 'Party Quest'
           
           with open(manifest_path, 'w') as f:
-              f.write(content)
+              json.dump(m, f, indent=2)
           
-          print("✅ CWA configured for Party Quest")
+          print("✅ Manifest configured for signing")
           PYEOF
 
-      - name: Build APK with Gradle
+      - name: Build APK + AAB
+        working-directory: ./twa
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/partyquest.jks \
-            -Pandroid.injected.signing.store.password=partyquest123 \
-            -Pandroid.injected.signing.key.alias=partyquest \
-            -Pandroid.injected.signing.key.password=partyquest123
+          printf 'n\n' | bubblewrap build
+        env:
+          BUBBLEWRAP_SKIP_LATEST_VERSION_CHECK: 'true'
 
-      - name: Build AAB (Play Store bundle)
-        run: |
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/partyquest.jks \
-            -Pandroid.injected.signing.store.password=partyquest123 \
-            -Pandroid.injected.signing.key.alias=partyquest \
-            -Pandroid.injected.signing.key.password=partyquest123
+      - name: List build outputs
+        run: find ./twa -type f \( -name "*.apk" -o -name "*.aab" \) 2>/dev/null || echo "No APK/AAB found"
 
-      - name: Find and rename outputs
-        run: |
-          find . -name "*.apk" -type f
-          find . -name "*.aab" -type f
-          
-          # Move to workspace root with standard names
-          mkdir -p outputs
-          find . -name "*release.apk" -exec cp {} outputs/party-quest.apk \;
-          find . -name "*release.aab" -exec cp {} outputs/party-quest.aab \;
-          ls -lh outputs/
-
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: outputs/party-quest.apk
+          path: twa/app-release-signed.apk
           if-no-files-found: warn
+          retention-days: 30
 
-      - name: Upload AAB artifact (Play Store)
+      - name: Upload AAB (Play Store)
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-aab
-          path: outputs/party-quest.aab
+          path: twa/app-release-bundle.aab
           if-no-files-found: warn
+          retention-days: 30
 
-      - name: Upload signing keystore
+      - name: Upload keystore (SAVE THIS!)
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-keystore
-          path: partyquest.jks
-          retention-days: 90
+          path: partyquest.keystore
+          retention-days: 30
