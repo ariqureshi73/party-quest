@@ -57,3 +57,4 @@ https://github.com/ariqureshi73/party-quest/commits/main
 - GitHub Pages hosting
 - PWA (installable on iOS & Android)
 - Stripe (DM Tier subscriptions)
+# Build trigger
