@@ -1,0 +1,29 @@
+{
+  "packageId": "app.partyquest.ttrpg",
+  "host": "ariqureshi73.github.io",
+  "name": "Party Quest",
+  "launcherName": "Party Quest",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#c9973a",
+  "backgroundColor": "#0f0d0a",
+  "startUrl": "/party-quest/",
+  "iconUrl": "https://ariqureshi73.github.io/party-quest/icons/icon-512.png",
+  "maskableIconUrl": "https://ariqureshi73.github.io/party-quest/icons/icon-512.png",
+  "appVersion": "1",
+  "appVersionCode": 1,
+  "signingMode": "none",
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://ariqureshi73.github.io/party-quest/manifest.json",
+  "enableNotifications": false,
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://ariqureshi73.github.io/party-quest/",
+  "minSdkVersion": 19,
+  "targetSdkVersion": 34
+}
