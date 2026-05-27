@@ -2,106 +2,117 @@ name: Build Party Quest APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['index.html']
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    
+    env:
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 11
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
 
-      - name: Download Android Command-line Tools
-        run: |
-          mkdir -p /opt/android-sdk/cmdline-tools
-          cd /opt/android-sdk/cmdline-tools
-          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip
-          unzip -q commandlinetools-linux-10406996_latest.zip
-          mv cmdline-tools latest
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          ndk-version: '26.0.10792818'
 
-      - name: Setup SDK
-        env:
-          ANDROID_SDK_ROOT: /opt/android-sdk
-        run: |
-          /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;26.1.10909125" \
-            --install_option=--no_https | head -100
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Create minimal Android project
-        env:
-          ANDROID_SDK_ROOT: /opt/android-sdk
-          ANDROID_HOME: /opt/android-sdk
-        run: |
-          mkdir -p app
-          cat > build.gradle << 'GRADLE'
-          plugins {
-            id 'com.android.application'
-          }
-          android {
-            namespace 'app.partyquest'
-            compileSdk 34
-            defaultConfig {
-              applicationId 'app.partyquest.ttrpg'
-              minSdk 28
-              targetSdk 34
-              versionCode 1
-              versionName '1.0'
-            }
-            signingConfigs {
-              release {
-                storeFile = file('partyquest.keystore')
-                storePassword 'partyquest123'
-                keyAlias 'partyquest'
-                keyPassword 'partyquest123'
-              }
-            }
-            buildTypes {
-              release {
-                signingConfig signingConfigs.release
-                minifyEnabled false
-              }
-            }
-            buildFeatures {
-              viewBinding true
-            }
-          }
-          dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          GRADLE
+      - name: Install Cordova
+        run: npm install -g cordova
 
-      - name: Generate keystore
+      - name: Create Cordova project
+        run: |
+          cordova create pq "app.partyquest.ttrpg" "Party Quest"
+          cd pq
+          cordova platform add android
+
+      - name: Add Party Quest web content
+        run: |
+          cp index.html pq/www/
+          cp manifest.json pq/www/
+
+      - name: Generate keystore (non-interactive)
         run: |
           keytool -genkeypair \
             -alias partyquest \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -keystore partyquest.keystore \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
             -storepass partyquest123 \
             -keypass partyquest123 \
-            -dname "CN=Party Quest,OU=App,O=PartyQuest,L=Camas,ST=WA,C=US" \
+            -dname "CN=Party Quest, OU=App, O=PartyQuest, L=Camas, ST=WA, C=US" \
             -noprompt
 
-      - name: List keystore
+      - name: Print SHA-256 fingerprint
         run: |
-          echo "=== SHA-256 FINGERPRINT ==="
-          keytool -list -v -keystore partyquest.keystore -alias partyquest -storepass partyquest123 | grep SHA256
+          echo "====== SHA-256 FINGERPRINT ======"
+          keytool -list -v \
+            -keystore $GITHUB_WORKSPACE/partyquest.keystore \
+            -alias partyquest \
+            -storepass partyquest123 | grep "SHA256:"
+          echo "================================="
 
-      - name: Upload keystore artifact
+      - name: Configure Cordova build settings
+        run: |
+          cd pq
+          cat > build.json << 'JSONEOF'
+          {
+            "android": {
+              "release": {
+                "keystore": "$GITHUB_WORKSPACE/partyquest.keystore",
+                "storePassword": "partyquest123",
+                "alias": "partyquest",
+                "password": "partyquest123",
+                "keystoreType": "jks"
+              }
+            }
+          }
+          JSONEOF
+
+      - name: Build signed APK (Cordova)
+        run: |
+          cd pq
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          cordova build android --release -- --keystore=$GITHUB_WORKSPACE/partyquest.keystore --storePassword=partyquest123 --alias=partyquest --password=partyquest123
+        env:
+          GRADLE_USER_HOME: /github/workspace/.gradle
+
+      - name: Find and rename APK
+        run: |
+          find pq -name "*.apk" -type f
+          ls -lah pq/platforms/android/app/build/outputs/apk/release/
+          # Copy to workspace root for easy access
+          cp pq/platforms/android/app/build/outputs/apk/release/app-release.apk $GITHUB_WORKSPACE/party-quest.apk || echo "APK not found"
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: partyquest-keystore
-          path: partyquest.keystore
+          name: party-quest-apk
+          path: party-quest.apk
+          if-no-files-found: warn
+          retention-days: 30
 
-      - name: Done
-        run: echo "✅ Keystore generated successfully"
+      - name: Upload keystore (SAVE THIS!)
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-keystore
+          path: partyquest.keystore
+          retention-days: 30
