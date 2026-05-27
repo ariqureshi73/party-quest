@@ -4,22 +4,20 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths: ['index.html', 'manifest.json']
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install Cordova
-        run: npm install -g cordova
 
       - name: Install Java 17
         uses: actions/setup-java@v4
@@ -29,25 +27,74 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
+
+      - name: Install Cordova
+        run: npm install -g cordova
 
       - name: Create Cordova project
-        run: cordova create partyquest app.partyquest.ttrpg 'Party Quest'
+        run: |
+          cordova create partyquest app.partyquest.ttrpg "Party Quest"
+          cd partyquest
+          cordova platform add android --save
 
-      - name: Add Android platform
-        run: cd partyquest && cordova platform add android
+      - name: Copy HTML to www
+        run: |
+          cp index.html partyquest/www/index.html
+          cp manifest.json partyquest/www/manifest.json
+          # Add viewport meta tag if missing
+          if ! grep -q 'viewport' partyquest/www/index.html; then
+            sed -i '/<head>/a\    <meta name="viewport" content="width=device-width, initial-scale=1.0">' partyquest/www/index.html
+          fi
 
-      - name: Copy HTML
-        run: cp index.html partyquest/www/index.html
+      - name: Configure Cordova for release build
+        run: |
+          cd partyquest
+          echo '<?xml version=\'1.0\' encoding=\'utf-8\'?>
+          <widget id="app.partyquest.ttrpg" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+              <name>Party Quest</name>
+              <description>D&D + TTRPGs Matchmaking</description>
+              <author email="support@partyquest.app" href="https://partyquest.app">Party Quest Team</author>
+              <content src="index.html" />
+              <access origin="*" />
+              <allow-intent href="http://*/*" />
+              <allow-intent href="https://*/*" />
+              <preference name="orientation" value="portrait" />
+              <preference name="target-device" value="universal" />
+              <preference name="fullscreen" value="true" />
+              <preference name="webviewbounce" value="false" />
+              <preference name="android-minSdkVersion" value="24" />
+              <preference name="android-targetSdkVersion" value="34" />
+              <plugin name="cordova-plugin-whitelist" spec="1" />
+              <engine name="android" spec="^13.0.0" />
+          </widget>' > config.xml
 
-      - name: Build APK
-        run: cd partyquest && cordova build android --release
+      - name: Build APK (release)
+        run: |
+          cd partyquest
+          cordova build android --release
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
+
+      - name: Find and copy APK
+        run: |
+          find partyquest -name "*.apk" -o -name "*.aab" | head -20
+          mkdir -p artifacts
+          find partyquest -name "*-release.apk" -exec cp {} artifacts/party-quest-release.apk \;
+          find partyquest -name "*.aab" -exec cp {} artifacts/party-quest-release.aab \;
+          ls -lah artifacts/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
-          path: partyquest/platforms/android/app/build/outputs/apk/release/*.apk
+          path: artifacts/party-quest-release.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload AAB (Play Store)
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-quest-aab
+          path: artifacts/party-quest-release.aab
           if-no-files-found: warn
           retention-days: 30
