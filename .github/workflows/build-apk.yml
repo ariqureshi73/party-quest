@@ -1,4 +1,4 @@
-name: Build Party Quest APK with EAS
+name: Build Party Quest APK
 
 on:
   workflow_dispatch:
@@ -7,94 +7,110 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Set up Java 11 (compatible with Android SDK)
+        uses: actions/setup-java@v4
         with:
-          node-version: '20'
+          java-version: '11'
+          distribution: 'temurin'
 
-      - name: Install Expo CLI
-        run: npm install -g eas-cli expo-cli
-
-      - name: Create minimal package.json
+      - name: Create Android project structure
         run: |
-          cat > package.json << 'JSONEOF'
-          {
-            "name": "party-quest",
-            "version": "1.0.0",
-            "description": "Party Quest - D&D matchmaking app",
-            "main": "index.js",
-            "scripts": {
-              "build": "eas build --platform android"
-            },
-            "dependencies": {
-              "react": "^18.0.0",
-              "react-native": "^0.71.0"
-            },
-            "devDependencies": {
-              "expo": "^50.0.0",
-              "eas-cli": "^9.0.0"
-            }
+          mkdir -p android/app
+          cd android
+          
+          # Create minimal gradle wrapper
+          mkdir -p gradle/wrapper
+          curl -s https://services.gradle.org/distributions/gradle-8.0-bin.zip -o gradle.zip
+          unzip -q gradle.zip
+          mv gradle-8.0/* gradle/wrapper/
+          
+          # Create settings.gradle
+          cat > settings.gradle << 'EOF'
+          include ':app'
+          EOF
+          
+          # Create build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+              }
           }
-          JSONEOF
-
-      - name: Create app.json (Expo config)
-        run: |
-          cat > app.json << 'JSONEOF'
-          {
-            "expo": {
-              "name": "Party Quest",
-              "slug": "party-quest",
-              "version": "1.0.0",
-              "assetBundlePatterns": ["**/*"],
-              "ios": { "supportsTabletMode": true },
-              "android": {
-                "adaptiveIcon": {
-                  "foregroundImage": "./assets/adaptive-icon.png",
-                  "backgroundColor": "#ffffff"
-                },
-                "package": "app.partyquest.ttrpg"
-              },
-              "web": {
-                "bundler": "metro",
-                "output": "static",
-                "favicon": "./assets/favicon.png"
-              },
-              "plugins": ["expo-router"]
-            }
+          EOF
+          
+          # Create app/build.gradle
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
           }
-          JSONEOF
+          
+          android {
+              compileSdk 34
+              defaultConfig {
+                  applicationId "app.partyquest.ttrpg"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+          
+          # Create minimal AndroidManifest.xml
+          mkdir -p app/src/main
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="app.partyquest.ttrpg">
+              <application
+                  android:label="Party Quest"
+                  android:theme="@style/Theme.AppCompat.Light">
+              </application>
+          </manifest>
+          EOF
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build APK locally with Gradle
+      - name: Generate signing keystore
         run: |
-          npm install -g @react-native-community/cli-android
-          npm run build 2>/dev/null || echo "EAS build requires account; using Docker fallback..."
+          cd android
+          keytool -genkeypair -alias release -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore release.keystore -storepass partyquest123 -keypass partyquest123 \
+            -dname "CN=Party Quest,O=PartyQuest,C=US" -noprompt
 
-      - name: Build APK with Docker (fallback)
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: amd64
-          distro: ubuntu22.04
-          run: |
-            apt-get update && apt-get install -y openjdk-11-jdk android-sdk gradle
-            export ANDROID_SDK_ROOT=/usr/lib/android-sdk
-            export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-            ./gradlew assembleRelease || echo "Gradle build failed"
-
-      - name: Fallback: Create dummy APK for testing
+      - name: Build APK with Gradle
         run: |
+          cd android
+          ./gradlew assembleRelease \
+            -Pandroid.useAndroidX=true \
+            -Pandroid.enableJetifier=true
+        env:
+          GRADLE_OPTS: "-Xmx4g"
+          SKIP_JDK_VERSION_CHECK: 'true'
+
+      - name: Find and copy APK
+        run: |
+          find android -name "*.apk" -type f
           mkdir -p dist
-          echo "Party Quest APK v1.0.0 - Generated $(date)" > dist/app-release.apk
+          find android -name "app-release.apk" -exec cp {} dist/ \;
           ls -la dist/
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: party-quest-apk
           path: dist/app-release.apk
-          retention-days: 30
+          if-no-files-found: warn
